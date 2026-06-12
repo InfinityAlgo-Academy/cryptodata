@@ -32,8 +32,9 @@ from rich.text import Text
 
 import config
 import utils
+import yahoo_finance
 from market_data import MarketDataStore, DataFrameManager, TickData
-from technical_indicators import TechnicalIndicatorStore, indicators_update_task
+from technical_indicators import TechnicalIndicatorStore, indicators_update_task, compute_indicators_from_klines
 from websocket_client import BinanceWebSocketClient, fetch_top_symbols
 
 # Logger setup: file only, no console output to interfere with Rich UI
@@ -730,6 +731,81 @@ async def dataframe_snapshot_task(
             pass
 
 
+async def yahoo_poll_task(
+    symbols: List[str],
+    store: MarketDataStore,
+    shutdown_event: asyncio.Event,
+    interval: float = 5.0,
+) -> None:
+    """Periodically fetch current price from Yahoo Finance and update MarketDataStore."""
+    log.info("Yahoo poll task started for %s", symbols)
+    while not shutdown_event.is_set():
+        for sym in symbols:
+            if shutdown_event.is_set():
+                break
+            try:
+                data = await asyncio.get_running_loop().run_in_executor(
+                    None, yahoo_finance.fetch_current, sym
+                )
+                if data:
+                    tick: TickData = {
+                        "symbol": sym,
+                        "last_price": data["price"],
+                        "price_change_pct": data["change_pct"],
+                        "volume": data["volume"],
+                        "high_24h": data["high"],
+                        "low_24h": data["low"],
+                        "bid_price": None,
+                        "ask_price": None,
+                        "bid_qty": None,
+                        "ask_qty": None,
+                        "timestamp": datetime.now(tz=timezone.utc).strftime("%H:%M:%S"),
+                    }
+                    await store.update(sym, tick)
+            except Exception as e:
+                log.debug("Yahoo poll error for %s: %s", sym, e)
+        try:
+            await asyncio.wait_for(shutdown_event.wait(), timeout=interval)
+        except asyncio.TimeoutError:
+            pass
+    log.info("Yahoo poll task stopped")
+
+
+async def yahoo_indicators_task(
+    symbols: List[str],
+    store: MarketDataStore,
+    rsi_store: RSIKlinesStore,
+    tech_store: TechnicalIndicatorStore,
+    shutdown_event: asyncio.Event,
+) -> None:
+    """Periodically fetch Yahoo historical data and compute technical indicators."""
+    log.info("Yahoo indicators task started for %s", symbols)
+    while not shutdown_event.is_set():
+        for sym in symbols:
+            if shutdown_event.is_set():
+                break
+            try:
+                klines = await asyncio.get_running_loop().run_in_executor(
+                    None, yahoo_finance.fetch_ohlcv, sym, "1h", "3mo"
+                )
+                if not klines:
+                    continue
+
+                closes = [float(k[4]) for k in klines]
+                await rsi_store.update(sym, closes)
+
+                ind = compute_indicators_from_klines(klines)
+                await tech_store.update(sym, ind)
+            except Exception as e:
+                log.debug("Yahoo indicators error for %s: %s", sym, e)
+
+        try:
+            await asyncio.wait_for(shutdown_event.wait(), timeout=120.0)
+        except asyncio.TimeoutError:
+            pass
+    log.info("Yahoo indicators task stopped")
+
+
 def _install_signal_handlers(
     shutdown_event: asyncio.Event, loop: asyncio.AbstractEventLoop
 ) -> None:
@@ -755,8 +831,12 @@ async def main() -> None:
         symbols.append("XAUTUSDT")
     log.info("Top %d symbols (excl. stablecoins): %s", len(symbols), symbols)
 
+    extra_symbols = ["GC=F"]
+    all_symbols = symbols + extra_symbols
+    log.info("Extra non-Binance symbols: %s", extra_symbols)
+
     # 2. Init Core logic
-    store = MarketDataStore(symbols)
+    store = MarketDataStore(all_symbols)
     df_manager = DataFrameManager()
     rsi_store = RSIKlinesStore()
     tech_store = TechnicalIndicatorStore()
@@ -789,6 +869,14 @@ async def main() -> None:
         asyncio.create_task(
             indicators_update_task(symbols, tech_store, shutdown_event),
             name="tech_indicators",
+        ),
+        asyncio.create_task(
+            yahoo_poll_task(extra_symbols, store, shutdown_event),
+            name="yahoo_poll",
+        ),
+        asyncio.create_task(
+            yahoo_indicators_task(extra_symbols, store, rsi_store, tech_store, shutdown_event),
+            name="yahoo_indicators",
         ),
     ]
 

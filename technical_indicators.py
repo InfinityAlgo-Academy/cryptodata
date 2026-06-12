@@ -222,57 +222,71 @@ async def fetch_klines(symbol: str, interval: str = "1h", limit: int = 100) -> L
     return await loop.run_in_executor(None, _fetch)
 
 
+def compute_indicators_from_klines(klines_1h: List[list]) -> dict:
+    """Compute all technical indicators from pre-fetched 1-hour klines."""
+    closes_1h = [float(k[K_CLOSE]) for k in klines_1h]
+    highs_1h = [float(k[K_HIGH]) for k in klines_1h]
+    lows_1h = [float(k[K_LOW]) for k in klines_1h]
+
+    result = {
+        "sma20": sma(closes_1h, 20),
+        "sma50": sma(closes_1h, 50),
+        "sma200": sma(closes_1h, 200),
+    }
+
+    macd_r = macd_from_closes(closes_1h, 12, 26, 9)
+    if macd_r:
+        result["macd"] = macd_r["macd"]
+        result["macd_signal"] = macd_r["signal"]
+        result["macd_histogram"] = macd_r["histogram"]
+        div = detect_macd_divergence(closes_1h, 50)
+        if div:
+            result["macd_divergence"] = div
+
+    bb = bollinger_bands(closes_1h, 20, 2.0)
+    if bb:
+        result["bb_upper"], result["bb_middle"], result["bb_lower"] = bb
+
+    lookback = 100
+    if len(highs_1h) >= lookback:
+        fib_high = max(highs_1h[-lookback:])
+        fib_low = min(lows_1h[-lookback:])
+        diff = fib_high - fib_low
+        if diff > 0:
+            result["fib_high"] = fib_high
+            result["fib_low"] = fib_low
+            result["fib_50"] = fib_low + 0.50 * diff
+            result["fib_618"] = fib_low + 0.618 * diff
+            result["fib_127"] = fib_high + 0.272 * diff
+            result["fib_161"] = fib_high + 0.618 * diff
+
+    last_24 = klines_1h[-24:] if len(klines_1h) >= 24 else klines_1h
+    v = vwap_from_klines(last_24)
+    if v is not None:
+        result["vwap"] = v
+
+    a = atr_14(highs_1h, lows_1h, closes_1h)
+    if a is not None:
+        result["atr"] = a
+
+    av = avg_quote_volume(klines_1h, 24)
+    if av is not None:
+        result["avg_vol"] = av
+
+    if len(klines_1h) >= 2:
+        prev = klines_1h[-2]
+        pivots = pivot_points(
+            float(prev[K_HIGH]), float(prev[K_LOW]), float(prev[K_CLOSE])
+        )
+        result.update(pivots)
+
+    return result
+
+
 async def compute_indicators_for_symbol(symbol: str) -> Optional[dict]:
     try:
         klines_1h = await fetch_klines(symbol, interval="1h", limit=210)
-        closes_1h = [float(k[K_CLOSE]) for k in klines_1h]
-        highs_1h = [float(k[K_HIGH]) for k in klines_1h]
-        lows_1h = [float(k[K_LOW]) for k in klines_1h]
-
-        result = {
-            "sma20": sma(closes_1h, 20),
-            "sma50": sma(closes_1h, 50),
-            "sma200": sma(closes_1h, 200),
-        }
-
-        macd_r = macd_from_closes(closes_1h, 12, 26, 9)
-        if macd_r:
-            result["macd"] = macd_r["macd"]
-            result["macd_signal"] = macd_r["signal"]
-            result["macd_histogram"] = macd_r["histogram"]
-            div = detect_macd_divergence(closes_1h, 50)
-            if div:
-                result["macd_divergence"] = div
-
-        bb = bollinger_bands(closes_1h, 20, 2.0)
-        if bb:
-            result["bb_upper"], result["bb_middle"], result["bb_lower"] = bb
-
-        lookback = 100
-        if len(highs_1h) >= lookback:
-            fib_high = max(highs_1h[-lookback:])
-            fib_low = min(lows_1h[-lookback:])
-            diff = fib_high - fib_low
-            if diff > 0:
-                result["fib_high"] = fib_high
-                result["fib_low"] = fib_low
-                result["fib_50"] = fib_low + 0.50 * diff
-                result["fib_618"] = fib_low + 0.618 * diff
-                result["fib_127"] = fib_high + 0.272 * diff
-                result["fib_161"] = fib_high + 0.618 * diff
-
-        last_24 = klines_1h[-24:] if len(klines_1h) >= 24 else klines_1h
-        v = vwap_from_klines(last_24)
-        if v is not None:
-            result["vwap"] = v
-
-        a = atr_14(highs_1h, lows_1h, closes_1h)
-        if a is not None:
-            result["atr"] = a
-
-        av = avg_quote_volume(klines_1h, 24)
-        if av is not None:
-            result["avg_vol"] = av
+        result = compute_indicators_from_klines(klines_1h)
 
         try:
             klines_1d = await fetch_klines(symbol, interval="1d", limit=3)
