@@ -81,7 +81,7 @@ async def fetch_top_symbols(n: int = config.TOP_N_SYMBOLS) -> List[str]:
                 binance_volume[sym] = float(t.get("quoteVolume", 0))
 
         # 2. Fetch top coins by market cap from CoinGecko
-        cg_url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&sparkline=false"
+        cg_url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&sparkline=false"
         with urllib.request.urlopen(cg_url, timeout=15) as resp:
             cg_data = json.loads(resp.read().decode())
 
@@ -101,6 +101,9 @@ async def fetch_top_symbols(n: int = config.TOP_N_SYMBOLS) -> List[str]:
         # 4. Sort by 24h Binance quote volume descending, take top n
         matched.sort(key=lambda s: binance_volume.get(s, 0), reverse=True)
         result = matched[:n]
+
+        if len(result) < n:
+            logger.warning("Only %d/%d valid symbols after cross-ref; considering increasing per_page", len(result), n)
 
         logger.info("Top %d symbols (volume-sorted): %s", len(result), result)
         return result
