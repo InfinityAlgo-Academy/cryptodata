@@ -727,7 +727,7 @@ def _install_signal_handlers(
 async def main() -> None:
     # 1. Discover symbols
     print("⏳ Fetching top symbols and connecting to Binance WebSocket...")
-    symbols = await fetch_top_symbols(config.TOP_N_SYMBOLS + 15)
+    symbols = await fetch_top_symbols(config.TOP_N_SYMBOLS + 30)
     symbols = [s for s in symbols if not any(stable in s.upper() for stable in config.STABLECOINS)]
     symbols = symbols[:config.TOP_N_SYMBOLS]
     symbols = [s for s in symbols if s != "XMRUSDT"]

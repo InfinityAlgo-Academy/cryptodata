@@ -25,7 +25,7 @@ BINANCE_REST_TICKER_URL = "https://api.binance.com/api/v3/ticker/24hr"
 QUOTE_ASSET = "USDT"
 
 # Number of top symbols (by quote volume) to track
-TOP_N_SYMBOLS = 50
+TOP_N_SYMBOLS = 100
 
 # Symbols to exclude (stablecoins, etc.)
 STABLECOINS = ["USDC", "USDD", "USD1", "USDS", "USDE", "DAI", "BUSD", "TUSD", "FRAX", "USTC", "PAX", "GUSD", "LUSD", "FDUSD"]
