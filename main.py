@@ -16,7 +16,6 @@ import sys
 import time
 import json
 import urllib.request
-from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
@@ -93,46 +92,7 @@ async def compute_all_rsi_realtime(snapshot: List[TickData], rsi_store: RSIKline
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-class PriceTracker:
-    """Tracks price changes tick-by-tick to show up/down flash indicators."""
 
-    FLASH_FRAMES = 4
-
-    def __init__(self) -> None:
-        self._last: Dict[str, float] = {}
-        self._direction: Dict[str, str] = defaultdict(lambda: "─")
-        self._frames: Dict[str, int] = defaultdict(int)
-
-    def update(self, symbol: str, price: Optional[float]) -> Text:
-        """Returns a formatted Rich Text object with the direction arrow."""
-        if price is None:
-            return Text("─", style="dim")
-
-        prev = self._last.get(symbol)
-        if prev is None:
-            self._last[symbol] = price
-            return Text("─", style="dim")
-
-        if price > prev:
-            self._direction[symbol] = "▲"
-            self._frames[symbol] = self.FLASH_FRAMES
-        elif price < prev:
-            self._direction[symbol] = "▼"
-            self._frames[symbol] = self.FLASH_FRAMES
-
-        self._last[symbol] = price
-
-        frames_left = self._frames[symbol]
-        if frames_left > 0:
-            self._frames[symbol] -= 1
-            d = self._direction[symbol]
-            style = "bold green" if d == "▲" else "bold red"
-            return Text(d, style=style)
-        else:
-            return Text("─", style="dim")
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 #  UI Components (Rich Renderables)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -143,7 +103,6 @@ class ScannerUI:
     def __init__(self) -> None:
         self.console = Console()
         self.layout = self._make_layout()
-        self.tracker = PriceTracker()
         self.start_t = time.monotonic()
         self.spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
         self.frame = 0
@@ -266,7 +225,7 @@ class ScannerUI:
         table.add_column("SYMBOL", justify="center", style="bold white")
         table.add_column("ACT", justify="center")
         table.add_column("TGT", justify="center")
-        table.add_column("TICK", justify="center", width=3)
+        table.add_column("TREND", justify="center", width=5)
         table.add_column("PRICE", justify="center", style="bold yellow")
         table.add_column("CHG%", justify="center")
         table.add_column("SPR", justify="center")
@@ -558,14 +517,15 @@ class ScannerUI:
             bid_qty = tick.get("bid_qty")
             ask_qty = tick.get("ask_qty")
 
-            arrow = self.tracker.update(raw_sym, pr)
-            pct_text = Text(
-                f"{pct:+.2f}%", style="bold green" if pct >= 0 else "bold red"
-            )
-
             rsi_info = rsi_data.get(raw_sym, {})
             rsi_val = rsi_info.get("rsi_5")
             rsi_text = format_rsi(rsi_val)
+
+            trend_text = Text("UP", style="bold green") if rsi_val is not None and rsi_val > 50 else Text("DOWN", style="bold red") if rsi_val is not None and rsi_val < 50 else Text("—", style="dim")
+
+            pct_text = Text(
+                f"{pct:+.2f}%", style="bold green" if pct >= 0 else "bold red"
+            )
 
             ti = tech_data.get(raw_sym, {})
             pr_float = float(pr) if pr is not None else None
@@ -609,7 +569,7 @@ class ScannerUI:
                 sym,
                 act_text,
                 tgt_text,
-                arrow,
+                trend_text,
                 utils.format_price(pr, 4),
                 pct_text,
                 spread_text,
