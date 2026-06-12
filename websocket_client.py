@@ -73,7 +73,7 @@ async def fetch_top_symbols(n: int = config.TOP_N_SYMBOLS) -> List[str]:
                 binance_usdt[base] = sym
 
         # 2. Fetch top coins by market cap from CoinGecko
-        cg_url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&sparkline=false"
+        cg_url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&sparkline=false"
         with urllib.request.urlopen(cg_url, timeout=15) as resp:
             cg_data = json.loads(resp.read().decode())
 
