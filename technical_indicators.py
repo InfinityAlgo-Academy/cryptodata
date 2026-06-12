@@ -94,6 +94,68 @@ def avg_quote_volume(klines: List[list], n_candles: int = 24) -> Optional[float]
     return sum(vols) / len(vols) * (24 / n_candles) if vols else None
 
 
+def macd_from_closes(closes: List[float], fast: int = 12, slow: int = 26, signal: int = 9) -> Optional[dict]:
+    if len(closes) < slow + signal:
+        return None
+    import pandas as pd
+    series = pd.Series(closes)
+    ema_f = series.ewm(span=fast, adjust=False).mean()
+    ema_s = series.ewm(span=slow, adjust=False).mean()
+    macd_line = ema_f - ema_s
+    sig_line = macd_line.ewm(span=signal, adjust=False).mean()
+    hist = macd_line - sig_line
+    return {
+        "macd": float(macd_line.iloc[-1]),
+        "signal": float(sig_line.iloc[-1]),
+        "histogram": float(hist.iloc[-1]),
+        "hist_series": hist,
+    }
+
+
+def detect_macd_divergence(closes: List[float], lookback: int = 50) -> Optional[str]:
+    if len(closes) < lookback + 10:
+        return None
+    import pandas as pd
+    series = pd.Series(closes[-lookback:])
+    ema_f = series.ewm(span=12, adjust=False).mean()
+    ema_s = series.ewm(span=26, adjust=False).mean()
+    macd_line = ema_f - ema_s
+    sig = macd_line.ewm(span=9, adjust=False).mean()
+    hist = (macd_line - sig).values
+    prices = series.values
+
+    pivots_high_p = []
+    pivots_low_p = []
+    pivots_high_m = []
+    pivots_low_m = []
+
+    for i in range(1, len(prices) - 1):
+        if prices[i] > prices[i-1] and prices[i] > prices[i+1]:
+            pivots_high_p.append((i, prices[i]))
+        if prices[i] < prices[i-1] and prices[i] < prices[i+1]:
+            pivots_low_p.append((i, prices[i]))
+        if hist[i] > hist[i-1] and hist[i] > hist[i+1]:
+            pivots_high_m.append((i, hist[i]))
+        if hist[i] < hist[i-1] and hist[i] < hist[i+1]:
+            pivots_low_m.append((i, hist[i]))
+
+    # Classic bearish divergence: price higher high, MACD lower high
+    if len(pivots_high_p) >= 2 and len(pivots_high_m) >= 2:
+        lp_h, pp_h = pivots_high_p[-1], pivots_high_p[-2]
+        lm_h, pm_h = pivots_high_m[-1], pivots_high_m[-2]
+        if lp_h[1] > pp_h[1] and lm_h[1] < pm_h[1]:
+            return "bearish"
+
+    # Classic bullish divergence: price lower low, MACD higher low
+    if len(pivots_low_p) >= 2 and len(pivots_low_m) >= 2:
+        lp_l, pp_l = pivots_low_p[-1], pivots_low_p[-2]
+        lm_l, pm_l = pivots_low_m[-1], pivots_low_m[-2]
+        if lp_l[1] < pp_l[1] and lm_l[1] > pm_l[1]:
+            return "bullish"
+
+    return None
+
+
 def vwap_from_klines(klines: List[list]) -> Optional[float]:
     if not klines:
         return None
@@ -172,6 +234,15 @@ async def compute_indicators_for_symbol(symbol: str) -> Optional[dict]:
             "sma50": sma(closes_1h, 50),
             "sma200": sma(closes_1h, 200),
         }
+
+        macd_r = macd_from_closes(closes_1h, 12, 26, 9)
+        if macd_r:
+            result["macd"] = macd_r["macd"]
+            result["macd_signal"] = macd_r["signal"]
+            result["macd_histogram"] = macd_r["histogram"]
+            div = detect_macd_divergence(closes_1h, 50)
+            if div:
+                result["macd_divergence"] = div
 
         bb = bollinger_bands(closes_1h, 20, 2.0)
         if bb:

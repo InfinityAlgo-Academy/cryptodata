@@ -240,6 +240,8 @@ class ScannerUI:
         table.add_column("MA200", justify="center")
         table.add_column("BB%", justify="center")
         table.add_column("ATR", justify="center")
+        table.add_column("MACD", justify="center")
+        table.add_column("DIV", justify="center", width=5)
         table.add_column("FIB", justify="center")
         table.add_column("RSI", justify="center")
         table.add_column("HIGH", justify="center", style="white")
@@ -343,6 +345,19 @@ class ScannerUI:
             pct = atr_val / price * 100
             color = "bold yellow" if pct > 5 else "white" if pct > 2 else "dim"
             return Text(f"{pct:.2f}%", style=color)
+
+        def format_macd_hist(hist: Optional[float]) -> Text:
+            if hist is None:
+                return Text("N/A", style="dim")
+            color = "bold green" if hist >= 0 else "bold red"
+            return Text(f"{hist:+.2f}", style=color)
+
+        def format_divergence(div: Optional[str]) -> Text:
+            if div is None:
+                return Text("—", style="dim")
+            if div == "bullish":
+                return Text("⬆", style="bold green")
+            return Text("⬇", style="bold red")
 
         def format_whales(ti: dict, bid_qty: Optional[float]=None, ask_qty: Optional[float]=None) -> Text:
             bw_q = ti.get("bid_wall_qty")
@@ -563,6 +578,8 @@ class ScannerUI:
             ma200_text = format_ma_dist(pr_float, ma200_val)
             bb_text = format_bb(pr_float, bb_u, bb_l)
             atr_text = format_atr(atr_val, pr_float)
+            macd_text = format_macd_hist(ti.get("macd_histogram"))
+            div_text = format_divergence(ti.get("macd_divergence"))
             fib_text = format_fib(pr_float, fib_low_val, fib_h)
 
             table.add_row(
@@ -584,6 +601,8 @@ class ScannerUI:
                 ma200_text,
                 bb_text,
                 atr_text,
+                macd_text,
+                div_text,
                 fib_text,
                 rsi_text,
                 utils.format_price(high, 2),
