@@ -11,6 +11,7 @@ Features:
 
 import asyncio
 import os
+import re
 import signal
 import sys
 import time
@@ -730,6 +731,7 @@ async def main() -> None:
     symbols = [s for s in symbols if not any(stable in s.upper() for stable in config.STABLECOINS)]
     symbols = symbols[:config.TOP_N_SYMBOLS]
     symbols = [s for s in symbols if s != "XMRUSDT"]
+    symbols = [s for s in symbols if re.match(r'^[A-Z0-9]{2,20}USDT$', s)]
     if "XAUTUSDT" not in symbols:
         symbols.append("XAUTUSDT")
     log.info("Top %d symbols (excl. stablecoins): %s", len(symbols), symbols)

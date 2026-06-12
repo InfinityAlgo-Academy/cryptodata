@@ -61,6 +61,9 @@ async def fetch_top_symbols(n: int = config.TOP_N_SYMBOLS) -> List[str]:
     list[str] – symbol strings, e.g. ["BTCUSDT", "ETHUSDT", ...]
     """
     import urllib.request
+    import re
+
+    VALID_SYMBOL = re.compile(r'^[A-Z0-9]{2,20}USDT$')
 
     logger.info("Fetching top %d symbols by CoinGecko market cap + Binance volume…", n)
     try:
@@ -89,6 +92,9 @@ async def fetch_top_symbols(n: int = config.TOP_N_SYMBOLS) -> List[str]:
             if base in binance_by_base:
                 matched.append(binance_by_base[base])
 
+        # 4. Remove any non-ASCII / corrupted symbols
+        matched = [s for s in matched if VALID_SYMBOL.match(s)]
+
         if not matched:
             raise Exception("No matching Binance pairs found from CoinGecko data")
 
@@ -111,7 +117,9 @@ async def fetch_top_symbols(n: int = config.TOP_N_SYMBOLS) -> List[str]:
                 and not t["symbol"].startswith(config.QUOTE_ASSET)
             ]
             usdt_tickers.sort(key=lambda t: float(t.get("quoteVolume", 0)), reverse=True)
-            return [t["symbol"] for t in usdt_tickers[:n]]
+            result = [t["symbol"] for t in usdt_tickers[:n * 2]]
+            result = [s for s in result if VALID_SYMBOL.match(s)]
+            return result[:n]
         except Exception:
             fallback = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT",
                         "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "SHIBUSDT", "DOTUSDT"]
