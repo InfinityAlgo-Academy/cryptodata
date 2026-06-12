@@ -156,6 +156,46 @@ def detect_macd_divergence(closes: List[float], lookback: int = 50) -> Optional[
     return None
 
 
+def detect_rsi_divergence(closes: List[float], lookback: int = 50) -> Optional[str]:
+    if len(closes) < lookback + 10:
+        return None
+    import pandas as pd
+    series = pd.Series(closes[-lookback:])
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(com=4, min_periods=5).mean()
+    avg_loss = loss.ewm(com=4, min_periods=5).mean()
+    rs = avg_gain / avg_loss
+    rsi_vals = (100 - (100 / (1 + rs))).values
+    prices = series.values
+
+    pivots_high_p = []
+    pivots_low_p = []
+    pivots_high_r = []
+    pivots_low_r = []
+
+    for i in range(1, len(prices) - 1):
+        if prices[i] > prices[i-1] and prices[i] > prices[i+1]:
+            pivots_high_p.append((i, prices[i]))
+        if prices[i] < prices[i-1] and prices[i] < prices[i+1]:
+            pivots_low_p.append((i, prices[i]))
+        if not pd.isna(rsi_vals[i]) and rsi_vals[i] > rsi_vals[i-1] and rsi_vals[i] > rsi_vals[i+1]:
+            pivots_high_r.append((i, rsi_vals[i]))
+        if not pd.isna(rsi_vals[i]) and rsi_vals[i] < rsi_vals[i-1] and rsi_vals[i] < rsi_vals[i+1]:
+            pivots_low_r.append((i, rsi_vals[i]))
+
+    if len(pivots_high_p) >= 2 and len(pivots_high_r) >= 2:
+        if pivots_high_p[-1][1] > pivots_high_p[-2][1] and pivots_high_r[-1][1] < pivots_high_r[-2][1]:
+            return "bearish"
+
+    if len(pivots_low_p) >= 2 and len(pivots_low_r) >= 2:
+        if pivots_low_p[-1][1] < pivots_low_p[-2][1] and pivots_low_r[-1][1] > pivots_low_r[-2][1]:
+            return "bullish"
+
+    return None
+
+
 def vwap_from_klines(klines: List[list]) -> Optional[float]:
     if not klines:
         return None
@@ -242,6 +282,10 @@ def compute_indicators_from_klines(klines_1h: List[list]) -> dict:
         div = detect_macd_divergence(closes_1h, 50)
         if div:
             result["macd_divergence"] = div
+
+    rsi_div = detect_rsi_divergence(closes_1h, 50)
+    if rsi_div:
+        result["rsi5_divergence"] = rsi_div
 
     bb = bollinger_bands(closes_1h, 20, 2.0)
     if bb:

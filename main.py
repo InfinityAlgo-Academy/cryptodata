@@ -249,11 +249,17 @@ class ScannerUI:
         table.add_column("LOW", justify="center", style="white")
         table.add_column("TIME", justify="center", style="dim")
 
-        def format_rsi(val: Optional[float]) -> Text:
+        def format_rsi(val: Optional[float], divergence: Optional[str] = None) -> Text:
             if val is None:
                 return Text("N/A", style="dim")
+            prefix = ""
+            if divergence == "bullish":
+                prefix = "⬆"
+            elif divergence == "bearish":
+                prefix = "⬇"
             color = "bold red" if val > 70 else "bold green" if val < 30 else "white"
-            return Text(f"{val:.1f}", style=color)
+            txt = f"{prefix} {val:.1f}" if prefix else f"{val:.1f}"
+            return Text(txt, style=color)
 
         def format_ma_dist(price: Optional[float], ma_val: Optional[float]) -> Text:
             if price is None or ma_val is None or ma_val == 0:
@@ -512,7 +518,8 @@ class ScannerUI:
 
             rsi_info = rsi_data.get(raw_sym, {})
             rsi_val = rsi_info.get("rsi_5")
-            rsi_text = format_rsi(rsi_val)
+            rsi_div = tech_data.get(raw_sym, {}).get("rsi5_divergence") if raw_sym in tech_data else None
+            rsi_text = format_rsi(rsi_val, rsi_div)
 
             trend_text = Text("UP", style="bold green") if rsi_val is not None and rsi_val > 50 else Text("DOWN", style="bold red") if rsi_val is not None and rsi_val < 50 else Text("—", style="dim")
 
