@@ -46,8 +46,11 @@ TickCallback = Callable[[TickData], Coroutine]
 
 async def fetch_top_symbols(n: int = config.TOP_N_SYMBOLS) -> List[str]:
     """
-    Fetch the top *n* USDT-quoted symbols ranked by market cap (via CoinGecko),
-    cross-referenced against available Binance USDT pairs.
+    Fetch the top *n* USDT-quoted symbols.
+
+    Strategy: pull top coins by market cap from CoinGecko, cross-reference
+    against Binance USDT pairs, then pick the most liquid (highest 24h volume)
+    among the matches.
 
     Parameters
     ----------
@@ -59,42 +62,45 @@ async def fetch_top_symbols(n: int = config.TOP_N_SYMBOLS) -> List[str]:
     """
     import urllib.request
 
-    logger.info("Fetching top %d symbols by market cap…", n)
+    logger.info("Fetching top %d symbols by CoinGecko market cap + Binance volume…", n)
     try:
-        # 1. Get available Binance USDT pairs (for cross-reference)
+        # 1. Get available Binance USDT pairs with 24h volume
         with urllib.request.urlopen(config.BINANCE_REST_TICKER_URL, timeout=10) as resp:
             binance_tickers = json.loads(resp.read().decode())
 
-        binance_usdt = {}
+        binance_by_base = {}
+        binance_volume = {}
         for t in binance_tickers:
             sym = t["symbol"]
             if sym.endswith(config.QUOTE_ASSET) and not sym.startswith(config.QUOTE_ASSET):
                 base = sym.replace(config.QUOTE_ASSET, "").upper()
-                binance_usdt[base] = sym
+                binance_by_base[base] = sym
+                binance_volume[sym] = float(t.get("quoteVolume", 0))
 
         # 2. Fetch top coins by market cap from CoinGecko
         cg_url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&sparkline=false"
         with urllib.request.urlopen(cg_url, timeout=15) as resp:
             cg_data = json.loads(resp.read().decode())
 
-        # 3. Cross-reference: keep only coins listed on Binance as USDT pairs
-        result = []
+        # 3. Cross-reference & collect matching Binance pairs
+        matched = []
         for coin in cg_data:
             base = coin["symbol"].upper()
-            if base in binance_usdt:
-                result.append(binance_usdt[base])
-            if len(result) >= n:
-                break
+            if base in binance_by_base:
+                matched.append(binance_by_base[base])
 
-        if not result:
+        if not matched:
             raise Exception("No matching Binance pairs found from CoinGecko data")
 
-        logger.info("Top %d symbols by market cap: %s", len(result), result)
+        # 4. Sort by 24h Binance quote volume descending, take top n
+        matched.sort(key=lambda s: binance_volume.get(s, 0), reverse=True)
+        result = matched[:n]
+
+        logger.info("Top %d symbols (volume-sorted): %s", len(result), result)
         return result
 
     except Exception as exc:
         logger.error("Failed to fetch by market cap: %s", exc)
-        # Fallback to Binance volume-sorted list
         logger.info("Falling back to Binance volume-sorted symbols…")
         try:
             with urllib.request.urlopen(config.BINANCE_REST_TICKER_URL, timeout=10) as resp:
