@@ -434,24 +434,11 @@ class ScannerUI:
         def format_targets(ti: dict, score: int, price: Optional[float]) -> Text:
             if price is None:
                 return Text("—", style="dim")
-            r1, r2 = ti.get("r1"), ti.get("r2")
-            s1, s2 = ti.get("s1"), ti.get("s2")
-            bb_u, bb_l = ti.get("bb_upper"), ti.get("bb_lower")
-            vwap = ti.get("vwap")
             fib_127, fib_161 = ti.get("fib_127"), ti.get("fib_161")
             fib_50, fib_618 = ti.get("fib_50"), ti.get("fib_618")
-            fib_low = ti.get("fib_low")
-            aw_p, bw_p = ti.get("ask_wall_price"), ti.get("bid_wall_price")
 
             def pfmt(v):
                 return f"{v:.2f}"
-
-            def round_num(p):
-                if p >= 10000: return round(p / 1000) * 1000
-                if p >= 1000: return round(p / 100) * 100
-                if p >= 100: return round(p / 10) * 10
-                if p >= 1: return round(p)
-                return None
 
             def confluences(tgt, sources):
                 c = 0
@@ -460,15 +447,15 @@ class ScannerUI:
                         c += 1
                 return c
 
-            def pick_target(cands, is_buy, all_srcs):
+            def pick_target(cands, is_buy, all_fibs):
                 if not cands:
                     return None
                 if is_buy:
-                    stop_pool = [v for v in [s1, s2, vwap, bb_l, bw_p, price*0.97] if v and v < price]
-                    stop = max(stop_pool)
+                    stop_pool = [v for v in [fib_618, fib_50] if v and v < price]
+                    stop = max(stop_pool) if stop_pool else price * 0.97
                 else:
-                    stop_pool = [v for v in [r1, r2, vwap, bb_u, aw_p, price*1.03] if v and v > price]
-                    stop = min(stop_pool)
+                    stop_pool = [v for v in [fib_127, fib_161] if v and v > price]
+                    stop = min(stop_pool) if stop_pool else price * 1.03
                 scored = []
                 for lbl, val in cands:
                     risk = (price - stop) if is_buy else (stop - price)
@@ -476,46 +463,35 @@ class ScannerUI:
                     if risk <= 0 or reward <= 0:
                         continue
                     rr = reward / risk
-                    con = confluences(val, all_srcs)
+                    con = confluences(val, all_fibs)
                     scored.append((rr * (1 + 0.4 * con), val, con, lbl, rr))
                 if not scored:
                     return None
                 scored.sort(key=lambda x: x[0], reverse=True)
                 return scored[0]
 
-            rn = round_num(price)
-            buy_srcs = [v for v in [r1, r2, bb_u, fib_127, fib_161, aw_p, vwap] if v]
-            sell_srcs = [v for v in [s1, s2, bb_l, fib_50, fib_618, bw_p, vwap] if v]
-            all_srcs = buy_srcs + sell_srcs + [fib_low, fib_50, fib_618, fib_127, fib_161]
-            if rn is not None:
-                all_srcs.append(rn)
+            fib_srcs = [v for v in [fib_50, fib_618, fib_127, fib_161] if v]
 
             if score >= 2:
-                bc = [(l, v) for l, v in [("R1", r1), ("R2", r2), ("BBU", bb_u),
-                     ("F127", fib_127), ("F161", fib_161), ("AW", aw_p), ("VW", vwap)]
-                     if v and v > price]
-                if rn is not None and rn > price:
-                    bc.append(("RN", rn))
-                best = pick_target(bc, True, all_srcs)
+                bc = [(l, v) for l, v in [("F50", fib_50), ("F618", fib_618),
+                     ("F127", fib_127), ("F161", fib_161)] if v and v > price]
+                best = pick_target(bc, True, fib_srcs)
                 if best:
                     _, tgt, con, lbl, rr = best
                     bolts = "⚡" * min(con, 4)
                     return Text(f"↗{lbl} {pfmt(tgt)} {bolts} 1:{rr:.1f}", style="bold green" if rr >= 2 and con >= 2 else "green")
 
             if score <= -2:
-                sc = [(l, v) for l, v in [("S1", s1), ("S2", s2), ("BBL", bb_l),
-                     ("F50", fib_50), ("F618", fib_618), ("BW", bw_p), ("VW", vwap)]
-                     if v and v < price]
-                if rn is not None and rn < price:
-                    sc.append(("RN", rn))
-                best = pick_target(sc, False, all_srcs)
+                sc = [(l, v) for l, v in [("F127", fib_127), ("F161", fib_161),
+                     ("F50", fib_50), ("F618", fib_618)] if v and v < price]
+                best = pick_target(sc, False, fib_srcs)
                 if best:
                     _, tgt, con, lbl, rr = best
                     bolts = "⚡" * min(con, 4)
                     return Text(f"↘{lbl} {pfmt(tgt)} {bolts} 1:{rr:.1f}", style="bold red")
 
-            near_s = max([v for v in [s1, s2] if v and v < price], default=None)
-            near_r = min([v for v in [r1, r2] if v and v > price], default=None)
+            near_s = max([v for v in [fib_618, fib_50] if v and v < price], default=None)
+            near_r = min([v for v in [fib_127, fib_161] if v and v > price], default=None)
             if near_s and near_r:
                 return Text(f"↕{pfmt(near_s)} {pfmt(near_r)}", style="dim white")
             return Text("—", style="dim")
