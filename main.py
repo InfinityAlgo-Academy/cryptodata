@@ -257,7 +257,7 @@ class ScannerUI:
                 prefix = "⬆"
             elif divergence == "bearish":
                 prefix = "⬇"
-            color = "bold red" if val > 70 else "bold green" if val < 30 else "white"
+            color = "bold red" if val > 90 else "bold green" if val < 10 else "white"
             txt = f"{prefix} {val:.1f}" if prefix else f"{val:.1f}"
             return Text(txt, style=color)
 
@@ -389,10 +389,10 @@ class ScannerUI:
                          rvol: Optional[float]) -> int:
             score = 0
             if rsi is not None:
-                if rsi < 20: score += 2
-                elif rsi < 35: score += 1
-                elif rsi > 80: score -= 2
-                elif rsi > 65: score -= 1
+                if rsi < 10: score += 2
+                elif rsi < 25: score += 1
+                elif rsi > 90: score -= 2
+                elif rsi > 75: score -= 1
             if bb_pct is not None:
                 if bb_pct < 10: score += 2
                 elif bb_pct < 25: score += 1
