@@ -1,0 +1,27 @@
+# Real-Time Crypto Market Scanner
+# ================================
+# Core async + WebSocket library — compatible with yfinance (>=13.0)
+websockets>=13.0
+
+# Data manipulation
+pandas>=2.0.0
+
+# Optional: faster JSON parsing (drop-in replacement for stdlib json)
+# ujson==5.10.0
+
+# Optional: coloured terminal output (if replacing manual ANSI codes)
+# colorama==0.4.6
+
+# Professional terminal tables and live display
+rich>=13.7.1
+
+# Future: Telegram bot integration
+# python-telegram-bot==21.3
+
+# Future: AI / ML predictions
+# scikit-learn==1.5.0
+# numpy==1.26.4
+
+# Future: Technical analysis (Elliott Wave, Fibonacci)
+# ta==0.11.0
+# pandas-ta==0.3.14b
