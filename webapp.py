@@ -618,7 +618,7 @@ body{display:flex;flex-direction:column}
 .loading{flex:1;display:flex;align-items:center;justify-content:center;color:#787b86;font-size:13px;gap:8px}
 .spinner{width:16px;height:16px;border:2px solid #2a2e39;border-top-color:#2962ff;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-#chart{flex:1;min-height:0}
+#chart{flex:1;min-height:0;display:none}
 #error{flex:1;display:none;align-items:center;justify-content:center;color:#f23645;font-size:13px;flex-direction:column;gap:8px}
 #error a{color:#2962ff;text-decoration:none}
 </style>
@@ -632,7 +632,7 @@ body{display:flex;flex-direction:column}
 <div class="loading" id="loading"><div class="spinner"></div>Loading 5000 candles&hellip;</div>
 <div id="error"></div>
 <div class="loading" id="realtime" style="display:none;flex:0;padding:6px;font-size:11px;color:#5b9cf5">Connecting real-time&hellip;</div>
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.0.1/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 const sym = '""" + symbol + r"""';
 const isBinance = !sym.includes('=');
@@ -661,8 +661,14 @@ async function loadChart() {
 
     document.getElementById('loading').style.display = 'none';
 
-    // ── Create chart ──
-    const chart = LightweightCharts.createChart(document.getElementById('chart'), {
+    // ── Show chart container, then create chart ──
+    const chartEl = document.getElementById('chart');
+    chartEl.style.display = 'block';
+    await new Promise(r => requestAnimationFrame(r));
+    // ensure chartEl has rendered dimensions
+    if (!chartEl || !chartEl.getBoundingClientRect) throw new Error('Chart container not found');
+
+    const chart = LightweightCharts.createChart(chartEl, {
       layout: { background: { color: '#131722' }, textColor: '#d1d4dc' },
       grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
