@@ -655,10 +655,11 @@ function connectWS() {
   ws.onclose = () => { setStatus(false); setTimeout(connectWS, 3000); };
   ws.onerror = () => { ws.close(); };
   ws.onmessage = (ev) => {
+    if (ev.data === 'pong') return;
     try {
       const data = JSON.parse(ev.data);
       if (data.type === 'update') render(data);
-    } catch(e) { console.error('Parse error', e); }
+    } catch(e) { /* skip non-JSON messages */ }
   };
 }
 
