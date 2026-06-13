@@ -599,7 +599,7 @@ async def root():
 
 @app.get("/chart/{symbol}")
 async def chart_page(symbol: str):
-    """Standalone candlestick chart page using TradingView Lightweight Charts."""
+    """Real-time candlestick chart with pivots & order book."""
     html = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -610,32 +610,36 @@ async def chart_page(symbol: str):
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;background:#131722;color:#d1d4dc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
 body{display:flex;flex-direction:column}
-.top{display:flex;align-items:center;gap:12px;padding:8px 16px;background:#1e222d;border-bottom:1px solid #2a2e39;flex-shrink:0}
-.top h2{font-size:14px;font-weight:600}
-.top h2 span{color:#787b86;font-weight:400;font-size:12px}
+.top{display:flex;align-items:center;gap:10px;padding:6px 14px;background:#1e222d;border-bottom:1px solid #2a2e39;flex-shrink:0;font-size:12px}
+.top h2{font-size:13px;font-weight:600}
+.top h2 span{color:#787b86;font-weight:400;font-size:11px}
+#countdown{padding:2px 8px;border-radius:3px;background:rgba(41,98,255,0.12);color:#5b9cf5;font-family:monospace;font-size:11px;font-weight:600}
+.top a{margin-left:auto;color:#2962ff;text-decoration:none;font-size:10px}
 .loading{flex:1;display:flex;align-items:center;justify-content:center;color:#787b86;font-size:13px;gap:8px}
 .spinner{width:16px;height:16px;border:2px solid #2a2e39;border-top-color:#2962ff;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-#chart{flex:1;min-height:0;display:none}
+#chart{flex:1;min-height:0}
 #error{flex:1;display:none;align-items:center;justify-content:center;color:#f23645;font-size:13px;flex-direction:column;gap:8px}
 #error a{color:#2962ff;text-decoration:none}
 </style>
 </head>
 <body>
 <div class="top">
-  <h2>""" + symbol + r""" <span>— Candlestick</span></h2>
-  <a href="https://www.tradingview.com/chart/?symbol=BINANCE:""" + symbol + r"""" target="_blank" rel="noopener" style="margin-left:auto;color:#2962ff;text-decoration:none;font-size:11px">TradingView ↗</a>
+  <h2>""" + symbol + r""" <span>— Real-Time</span></h2>
+  <div id="countdown">--:--</div>
+  <a href="https://www.tradingview.com/chart/?symbol=BINANCE:""" + symbol + r"""" target="_blank" rel="noopener">TradingView ↗</a>
 </div>
 <div class="loading" id="loading"><div class="spinner"></div>Loading 5000 candles&hellip;</div>
 <div id="error"></div>
-<div id="chart"></div>
+<div class="loading" id="realtime" style="display:none;flex:0;padding:6px;font-size:11px;color:#5b9cf5">Connecting real-time&hellip;</div>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 const sym = '""" + symbol + r"""';
+const isBinance = !sym.includes('=');
 
+// ── Fetch 5000 1h candles from Binance ──
 async function fetchKlines(endTime) {
-  const url = 'https://api.binance.com/api/v3/klines?symbol=' + sym + '&interval=1h&limit=1000' +
-    (endTime ? '&endTime=' + endTime : '');
+  const url = 'https://api.binance.com/api/v3/klines?symbol=' + sym + '&interval=1h&limit=1000' + (endTime ? '&endTime=' + endTime : '');
   const res = await fetch(url);
   if (!res.ok) throw new Error('Binance API error ' + res.status);
   return await res.json();
@@ -656,8 +660,8 @@ async function loadChart() {
     if (all.length < 20) throw new Error('Not enough data (got ' + all.length + ' candles)');
 
     document.getElementById('loading').style.display = 'none';
-    document.getElementById('chart').style.display = 'block';
 
+    // ── Create chart ──
     const chart = LightweightCharts.createChart(document.getElementById('chart'), {
       layout: { background: { color: '#131722' }, textColor: '#d1d4dc' },
       grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
@@ -677,25 +681,156 @@ async function loadChart() {
       priceFormat: { type: 'volume' },
       priceScaleId: 'volume',
     });
-    chart.priceScale('volume').applyOptions({
-      scaleMargins: { top: 0.85, bottom: 0 },
-    });
+    chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
 
+    // ── Set initial data ──
     const cdata = [], vdata = [];
-    let prevClose = all[0][4];
     for (const k of all) {
       const t = Math.floor(k[0] / 1000);
       cdata.push({ time: t, open: parseFloat(k[1]), high: parseFloat(k[2]), low: parseFloat(k[3]), close: parseFloat(k[4]) });
-      const vol = parseFloat(k[5]);
-      vdata.push({ time: t, value: vol, color: parseFloat(k[4]) >= parseFloat(k[1]) ? 'rgba(8,153,129,0.3)' : 'rgba(242,54,69,0.3)' });
+      vdata.push({ time: t, value: parseFloat(k[5]), color: parseFloat(k[4]) >= parseFloat(k[1]) ? 'rgba(8,153,129,0.3)' : 'rgba(242,54,69,0.3)' });
     }
-
     candleSeries.setData(cdata);
     volumeSeries.setData(vdata);
     chart.timeScale().fitContent();
     chart.timeScale().scrollToPosition(-5);
 
+    // ── Pivot lines ──
+    let pivotLines = [];
+    async function loadPivots() {
+      try {
+        const res = await fetch('/api/symbol/' + encodeURIComponent(sym));
+        const d = await res.json();
+        if (d.pivot_points && Object.keys(d.pivot_points).length) {
+          pivotLines.forEach(l => chart.removePriceLine(l));
+          pivotLines = [];
+          const pivots = d.pivot_points;
+          const colors = ['#f23645','#f77c5a','#f0b90b','#2962ff','#f0b90b','#f77c5a','#f23645'];
+          const keys = ['r3','r2','r1','pivot','s1','s2','s3'];
+          keys.forEach((k, i) => {
+            if (pivots[k] != null) {
+              pivotLines.push(candleSeries.createPriceLine({
+                price: pivots[k], color: colors[i], lineWidth: 1, lineStyle: 2,
+                axisLabelVisible: true, title: k.toUpperCase(),
+              }));
+            }
+          });
+        }
+      } catch(e) { /* pivots not critical */ }
+    }
+    await loadPivots();
+
+    // ── Order book bubbles (bid/ask lines) ──
+    let obLines = [];
+    async function loadOrderBook() {
+      try {
+        const res = await fetch('/api/symbol/' + encodeURIComponent(sym));
+        const d = await res.json();
+        obLines.forEach(l => chart.removePriceLine(l));
+        obLines = [];
+        if (d.orderbook) {
+          const ob = d.orderbook;
+          if (ob.bids && ob.bids.length) {
+            const b = ob.bids[0];
+            obLines.push(candleSeries.createPriceLine({
+              price: b.p, color: 'rgba(8,153,129,0.6)', lineWidth: 2, lineStyle: 0,
+              axisLabelVisible: true, title: 'Bid ' + b.p.toFixed(2),
+            }));
+          }
+          if (ob.asks && ob.asks.length) {
+            const a = ob.asks[0];
+            obLines.push(candleSeries.createPriceLine({
+              price: a.p, color: 'rgba(242,54,69,0.6)', lineWidth: 2, lineStyle: 0,
+              axisLabelVisible: true, title: 'Ask ' + a.p.toFixed(2),
+            }));
+          }
+        }
+        if (d.order_book_walls) {
+          if (d.order_book_walls.bid) {
+            const w = d.order_book_walls.bid;
+            obLines.push(candleSeries.createPriceLine({
+              price: w.price, color: 'rgba(8,153,129,0.9)', lineWidth: 3, lineStyle: 0,
+              axisLabelVisible: true, title: 'Wall $' + (w.value/1000).toFixed(0) + 'K',
+            }));
+          }
+          if (d.order_book_walls.ask) {
+            const w = d.order_book_walls.ask;
+            obLines.push(candleSeries.createPriceLine({
+              price: w.price, color: 'rgba(242,54,69,0.9)', lineWidth: 3, lineStyle: 0,
+              axisLabelVisible: true, title: 'Wall $' + (w.value/1000).toFixed(0) + 'K',
+            }));
+          }
+        }
+      } catch(e) { /* ob not critical */ }
+    }
+    await loadOrderBook();
+    setInterval(loadOrderBook, 5000);
+
+    // ── Real-time WebSocket (Binance kline stream) ──
+    if (isBinance) {
+      document.getElementById('realtime').style.display = 'flex';
+      let ws = null;
+      let currentCandle = all[all.length - 1];
+      let lastCandleTime = currentCandle[0];
+      let closeTime = currentCandle[6];
+
+      function connectWS() {
+        try {
+          if (ws) ws.close();
+          ws = new WebSocket('wss://stream.binance.com:9443/ws/' + sym.toLowerCase() + '@kline_1h');
+          document.getElementById('realtime').textContent = 'Real-time connected';
+
+          ws.onmessage = (ev) => {
+            const msg = JSON.parse(ev.data);
+            if (msg.e !== 'kline') return;
+            const k = msg.k;
+            const t = Math.floor(k.t / 1000);
+            const o = parseFloat(k.o), h = parseFloat(k.h), l = parseFloat(k.l), c = parseFloat(k.c);
+            const v = parseFloat(k.v);
+            const volColor = c >= o ? 'rgba(8,153,129,0.3)' : 'rgba(242,54,69,0.3)';
+            closeTime = k.T;
+
+            if (t === lastCandleTime) {
+              // Update existing candle
+              candleSeries.update({ time: t, open: o, high: h, low: l, close: c });
+              volumeSeries.update({ time: t, value: v, color: volColor });
+            } else {
+              // New candle
+              lastCandleTime = t;
+              candleSeries.update({ time: t, open: o, high: h, low: l, close: c });
+              volumeSeries.update({ time: t, value: v, color: volColor });
+            }
+          };
+
+          ws.onclose = () => {
+            document.getElementById('realtime').textContent = 'Reconnecting…';
+            setTimeout(connectWS, 3000);
+          };
+          ws.onerror = () => { ws.close(); };
+        } catch(e) {
+          document.getElementById('realtime').textContent = 'WS error, retrying…';
+          setTimeout(connectWS, 5000);
+        }
+      }
+
+      // ── Countdown timer ──
+      function updateCountdown() {
+        if (!closeTime) return;
+        const remaining = Math.max(0, Math.floor((closeTime - Date.now()) / 1000));
+        const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+        const s = String(remaining % 60).padStart(2, '0');
+        document.getElementById('countdown').textContent = m + ':' + s;
+      }
+      setInterval(updateCountdown, 200);
+
+      connectWS();
+    } else {
+      document.getElementById('countdown').textContent = 'N/A';
+    }
+
+    // ── Resize handler ──
     window.addEventListener('resize', () => chart.applyOptions({ width: document.getElementById('chart').clientWidth }));
+
   } catch (e) {
     document.getElementById('loading').style.display = 'none';
     const err = document.getElementById('error');
