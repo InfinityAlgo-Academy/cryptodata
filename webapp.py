@@ -328,19 +328,23 @@ async def compute_display_data(store, rsi_store, tech_store):
 
         ob_bid = None
         if bw_p is not None and bw_q is not None:
+            rv = bw_q * (pr_f or 0)
             v = qfmt_quote(bw_q, pr_f)
-            if v: ob_bid = {"price": pfmt(bw_p), "val": v}
+            if v: ob_bid = {"price": pfmt(bw_p), "val": v, "raw": round(rv)}
         if not ob_bid and bid is not None and bid_qty is not None:
+            rv = bid_qty * (pr_f or 0)
             v = qfmt_quote(bid_qty, pr_f)
-            if v: ob_bid = {"price": pfmt(bid), "val": v}
+            if v: ob_bid = {"price": pfmt(bid), "val": v, "raw": round(rv)}
 
         ob_ask = None
         if aw_p is not None and aw_q is not None:
+            rv = aw_q * (pr_f or 0)
             v = qfmt_quote(aw_q, pr_f)
-            if v: ob_ask = {"price": pfmt(aw_p), "val": v}
+            if v: ob_ask = {"price": pfmt(aw_p), "val": v, "raw": round(rv)}
         if not ob_ask and ask is not None and ask_qty is not None:
+            rv = ask_qty * (pr_f or 0)
             v = qfmt_quote(ask_qty, pr_f)
-            if v: ob_ask = {"price": pfmt(ask), "val": v}
+            if v: ob_ask = {"price": pfmt(ask), "val": v, "raw": round(rv)}
 
         # Whales
         whales_side, whales_val = None, None

@@ -294,6 +294,12 @@ td.symbol { font-weight: 600; color: var(--text-primary); text-align: center; le
 /* OB */
 .ob-bid { color: var(--green); }
 .ob-ask { color: var(--red); }
+.ob-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 120px; }
+.ob-row { display: flex; justify-content: space-between; width: 100%; font-size: 10px; }
+.ob-bar-wrap { display: flex; width: 100%; height: 6px; border-radius: 3px; overflow: hidden; background: var(--bg-card); }
+.ob-bar-bid { height: 100%; background: var(--green); transition: width 0.3s; border-right: 1px solid var(--bg-primary); }
+.ob-bar-ask { height: 100%; background: var(--red); transition: width 0.3s; }
+.ob-na { color: var(--text-dim); font-size: 10px; }
 
 /* Targets */
 .tgt-buy  { color: var(--green); font-size: 10px; }
@@ -508,13 +514,24 @@ function obHtml(ob) {
 }
 
 function obHtmlBoth(bid, ask) {
-  const parts = [];
-  if (bid) parts.push(`<span class="ob-bid">B ${bid.price} ${bid.val}</span>`);
-  else parts.push('<span style="color:var(--text-dim)">B \u2014</span>');
-  parts.push('<span style="color:var(--text-dim)">\u2502</span>');
-  if (ask) parts.push(`<span class="ob-ask">S ${ask.price} ${ask.val}</span>`);
-  else parts.push('<span style="color:var(--text-dim)">S \u2014</span>');
-  return parts.join(' ');
+  if (!bid && !ask) return '<span class="ob-na">\u2014</span>';
+  const bidVal = bid ? (bid.raw || 0) : 0;
+  const askVal = ask ? (ask.raw || 0) : 0;
+  const total = bidVal + askVal || 1;
+  const bidPct = (bidVal / total * 100).toFixed(0);
+  const askPct = (askVal / total * 100).toFixed(0);
+  const bidStr = bid ? `B ${bid.price} ${bid.val}` : '<span style="color:var(--text-dim)">B \u2014</span>';
+  const askStr = ask ? `S ${ask.price} ${ask.val}` : '<span style="color:var(--text-dim)">S \u2014</span>';
+  return '<div class="ob-cell">' +
+    '<div class="ob-row">' +
+      '<span class="ob-bid">' + bidStr + '</span>' +
+      '<span class="ob-ask">' + askStr + '</span>' +
+    '</div>' +
+    '<div class="ob-bar-wrap">' +
+      '<div class="ob-bar-bid" style="width:' + bidPct + '%"></div>' +
+      '<div class="ob-bar-ask" style="width:' + askPct + '%"></div>' +
+    '</div>' +
+  '</div>';
 }
 
 function whalesHtml(side, val) {
