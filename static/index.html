@@ -6,123 +6,177 @@
 <title>Crypto Market Scanner</title>
 <style>
 :root {
-  --bg-primary: #0d1117;
-  --bg-secondary: #161b22;
-  --bg-tertiary: #21262d;
-  --border: #30363d;
-  --text-primary: #c9d1d9;
-  --text-secondary: #8b949e;
-  --text-dim: #484f58;
-  --green: #3fb950;
-  --green-bg: rgba(63,185,80,0.15);
-  --red: #f85149;
-  --red-bg: rgba(248,81,73,0.15);
-  --yellow: #d29922;
-  --cyan: #58a6ff;
+  --bg-primary: #0b0e11;
+  --bg-secondary: #13161a;
+  --bg-card: #1e2329;
+  --bg-hover: #2b3139;
+  --border: #2b3139;
+  --border-light: #363d46;
+  --text-primary: #eaecef;
+  --text-secondary: #848e9c;
+  --text-dim: #5e6673;
+  --green: #0ecb81;
+  --green-bg: rgba(14,203,129,0.12);
+  --green-glow: rgba(14,203,129,0.25);
+  --red: #f6465d;
+  --red-bg: rgba(246,70,93,0.12);
+  --red-glow: rgba(246,70,93,0.25);
+  --yellow: #f0b90b;
+  --cyan: #1e80ff;
   --orange: #f0883e;
-  --font-mono: 'SF Mono','Fira Code','Consolas','Menlo',monospace;
-  --font-sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --purple: #a96dff;
+  --font-mono: 'SF Mono','Fira Code','IBM Plex Mono','Consolas',monospace;
+  --font-sans: -apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Roboto,Helvetica,Arial,sans-serif;
+  --radius: 6px;
+  --header-h: 52px;
+  --summary-h: 42px;
+  --footer-h: 32px;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; }
 body {
   font-family: var(--font-sans);
   background: var(--bg-primary);
   color: var(--text-primary);
-  overflow: hidden;
-  height: 100vh;
   display: flex;
   flex-direction: column;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* HEADER */
+/* === ACCENT BAR === */
+.accent-bar {
+  height: 3px;
+  background: linear-gradient(90deg, var(--cyan), var(--green), var(--yellow), var(--red));
+  flex-shrink: 0;
+}
+
+/* === HEADER === */
 header {
+  height: var(--header-h);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
-  padding: 10px 20px;
+  padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
-  gap: 16px;
 }
 header h1 {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  color: var(--cyan);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--cyan), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   white-space: nowrap;
 }
-.header-mid {
+.header-center {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
+}
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 12px 3px 8px;
+  border-radius: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
 }
 .status-dot {
   display: inline-block;
-  width: 10px; height: 10px;
+  width: 7px; height: 7px;
   border-radius: 50%;
-  margin-right: 6px;
+  flex-shrink: 0;
 }
-.status-dot.connected  { background: var(--green); box-shadow: 0 0 8px var(--green); }
-.status-dot.disconnected { background: var(--red); box-shadow: 0 0 8px var(--red); }
-.status-dot.connecting  { background: var(--yellow); animation: pulse 1s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.status-dot.connected  { background: var(--green); box-shadow: 0 0 6px var(--green-glow); }
+.status-dot.disconnected { background: var(--red); box-shadow: 0 0 6px var(--red-glow); }
+.status-dot.connecting  { background: var(--yellow); box-shadow: 0 0 6px rgba(240,185,11,0.4); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
 .header-time {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
+  letter-spacing: 0.3px;
 }
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   font-size: 12px;
   color: var(--text-secondary);
 }
+.header-right span { display: flex; align-items: center; gap: 4px; }
+.header-right .uptime-val { color: var(--text-primary); font-family: var(--font-mono); }
 
-/* SUMMARY */
+/* === SUMMARY === */
 #summary {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 8px 20px;
+  height: var(--summary-h);
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
   flex-shrink: 0;
   overflow-x: auto;
-  font-size: 13px;
-  min-height: 40px;
+  gap: 0;
 }
-.summary-item { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-.summary-label { color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+#summary::-webkit-scrollbar { height: 0; }
+#summaryContent {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+}
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  border-right: 1px solid var(--border);
+  height: 28px;
+  white-space: nowrap;
+}
+.summary-item:last-child { border-right: none; }
+.summary-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-dim); font-weight: 500; }
+.summary-value { font-family: var(--font-mono); font-size: 13px; font-weight: 600; }
 .breadth-bar {
-  display: inline-flex; height: 12px; border-radius: 3px; overflow: hidden;
+  display: inline-flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
   min-width: 60px;
+  background: var(--bg-card);
 }
 .breadth-gainers { background: var(--green); }
-.breadth-neutral { background: var(--text-dim); }
+.breadth-neutral { background: var(--border); }
 .breadth-losers  { background: var(--red); }
-.breadth-text { font-family: var(--font-mono); font-size: 12px; }
-.chg-positive { color: var(--green); }
-.chg-negative { color: var(--red); }
+.breadth-text { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); }
 
-/* TABLE CONTAINER */
+/* === TABLE CONTAINER === */
 #table-wrap {
   flex: 1;
   overflow: auto;
   position: relative;
+  background: var(--bg-primary);
 }
-#table-wrap::-webkit-scrollbar { width: 8px; height: 8px; }
-#table-wrap::-webkit-scrollbar-track { background: var(--bg-primary); }
-#table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+#table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+#table-wrap::-webkit-scrollbar-track { background: transparent; }
+#table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 #table-wrap::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
-/* TABLE */
+/* === TABLE === */
 table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11.5px;
   white-space: nowrap;
 }
 thead {
@@ -131,40 +185,51 @@ thead {
   z-index: 10;
 }
 th {
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   color: var(--text-secondary);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  font-size: 10px;
-  padding: 6px 8px;
+  font-size: 9.5px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   text-align: center;
   position: sticky;
   top: 0;
+  z-index: 11;
 }
 td {
-  padding: 4px 8px;
+  padding: 5px 10px;
   text-align: center;
-  border-bottom: 1px solid rgba(48,54,61,0.4);
+  border-bottom: 1px solid rgba(43,49,57,0.5);
   vertical-align: middle;
+  transition: background 0.15s;
 }
-tbody tr:hover { background: rgba(255,255,255,0.03); }
-tbody tr:nth-child(even) { background: rgba(255,255,255,0.015); }
-tbody tr:nth-child(even):hover { background: rgba(255,255,255,0.04); }
+tbody tr {
+  transition: background 0.15s;
+}
+tbody tr:hover td {
+  background: rgba(30,128,255,0.04);
+}
+tbody tr:nth-child(even) td {
+  background: rgba(255,255,255,0.012);
+}
+tbody tr:nth-child(even):hover td {
+  background: rgba(30,128,255,0.05);
+}
 
 /* Column styling */
-td.num { color: var(--text-dim); font-size: 11px; }
-td.symbol { font-weight: 600; color: var(--text-primary); text-align: center; }
+td.num { color: var(--text-dim); font-size: 10px; width: 28px; }
+td.symbol { font-weight: 600; color: var(--text-primary); text-align: center; letter-spacing: 0.3px; }
 
 /* Action */
-.action-strong_buy  { color: var(--green); font-weight: 700; }
-.action-buy         { color: var(--green); font-weight: 600; }
-.action-lean_buy    { color: var(--green); font-weight: 400; }
-.action-hold        { color: var(--text-dim); }
-.action-lean_sell   { color: var(--red); font-weight: 400; }
-.action-sell        { color: var(--red); font-weight: 600; }
-.action-strong_sell { color: var(--red); font-weight: 700; }
+.action-strong_buy  { color: var(--green); font-weight: 700; font-size: 10.5px; letter-spacing: 0.3px; }
+.action-buy         { color: var(--green); font-weight: 600; font-size: 10.5px; }
+.action-lean_buy    { color: var(--green); font-weight: 400; font-size: 10.5px; }
+.action-hold        { color: var(--text-dim); font-size: 10.5px; }
+.action-lean_sell   { color: var(--red); font-weight: 400; font-size: 10.5px; }
+.action-sell        { color: var(--red); font-weight: 600; font-size: 10.5px; }
+.action-strong_sell { color: var(--red); font-weight: 700; font-size: 10.5px; letter-spacing: 0.3px; }
 
 /* Trend */
 .trend-up   { color: var(--green); font-weight: 600; }
@@ -183,7 +248,7 @@ td.symbol { font-weight: 600; color: var(--text-primary); text-align: center; }
 .spread-bad     { color: var(--red); font-weight: 600; }
 
 /* Vol */
-.vol { color: #d2a8ff; }
+.vol { color: var(--purple); }
 
 /* R Vol */
 .rvol-high { color: var(--green); font-weight: 600; }
@@ -231,22 +296,26 @@ td.symbol { font-weight: 600; color: var(--text-primary); text-align: center; }
 .ob-ask { color: var(--red); }
 
 /* Targets */
-.tgt-buy  { color: var(--green); font-size: 11px; }
-.tgt-sell { color: var(--red); font-size: 11px; }
+.tgt-buy  { color: var(--green); font-size: 10px; }
+.tgt-sell { color: var(--red); font-size: 10px; }
 
-/* FOOTER */
+/* === FOOTER === */
 footer {
+  height: var(--footer-h);
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
-  padding: 6px 20px;
+  padding: 0 20px;
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
-  color: var(--text-secondary);
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-dim);
   flex-shrink: 0;
 }
+footer span { display: flex; align-items: center; gap: 4px; }
+footer .footer-val { color: var(--text-secondary); font-family: var(--font-mono); }
 
-/* LOADING */
+/* === LOADING === */
 #loading {
   display: flex;
   align-items: center;
@@ -256,26 +325,43 @@ footer {
   gap: 16px;
 }
 .spinner {
-  border: 3px solid var(--border);
-  border-top: 3px solid var(--cyan);
+  width: 32px; height: 32px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--cyan);
   border-radius: 50%;
-  width: 40px; height: 40px;
-  animation: spin 0.8s linear infinite;
+  animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-.loading-text { color: var(--text-secondary); font-size: 14px; }
+.loading-text { color: var(--text-dim); font-size: 13px; }
+
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+  header { padding: 0 12px; }
+  header h1 { font-size: 12px; }
+  .header-center { gap: 12px; }
+  .header-right { gap: 10px; }
+  #summary { padding: 0 8px; }
+  .summary-item { padding: 0 8px; }
+  th, td { padding: 4px 5px; font-size: 10px; }
+  td.num { width: 20px; }
+}
 </style>
 </head>
 <body>
 
+<div class="accent-bar"></div>
+
 <header>
-  <h1>REAL-TIME CRYPTO MARKET SCANNER</h1>
-  <div class="header-mid">
-    <span id="status"><span class="status-dot connecting"></span>Connecting</span>
+  <h1>CRYPTO SCANNER</h1>
+  <div class="header-center">
+    <span class="status-badge" id="status">
+      <span class="status-dot connecting"></span>
+      <span>Connecting</span>
+    </span>
     <span class="header-time" id="headerTime">--:--:-- UTC</span>
   </div>
   <div class="header-right">
-    <span>Uptime: <span id="uptime">00:00:00</span></span>
+    <span>Uptime: <span class="uptime-val" id="uptime">00:00:00</span></span>
   </div>
 </header>
 
@@ -292,21 +378,21 @@ footer {
     </span>
     <span class="summary-item" id="avgChgItem" style="display:none">
       <span class="summary-label">Avg Chg</span>
-      <span id="avgChg"></span>
+      <span class="summary-value" id="avgChg"></span>
     </span>
     <span class="summary-item" id="volItem" style="display:none">
       <span class="summary-label">Vol</span>
-      <span id="totalVol"></span>
+      <span class="summary-value" id="totalVol"></span>
     </span>
     <span class="summary-item" id="bestItem" style="display:none">
       <span class="summary-label">Best</span>
-      <span id="bestSym"></span>
-      <span id="bestChg"></span>
+      <span class="summary-value" id="bestChg"></span>
+      <span class="summary-label" id="bestSymLabel" style="color:var(--text-secondary);font-size:11px"></span>
     </span>
     <span class="summary-item" id="worstItem" style="display:none">
       <span class="summary-label">Worst</span>
-      <span id="worstSym"></span>
-      <span id="worstChg"></span>
+      <span class="summary-value" id="worstChg"></span>
+      <span class="summary-label" id="worstSymLabel" style="color:var(--text-secondary);font-size:11px"></span>
     </span>
   </div>
 </div>
@@ -348,8 +434,8 @@ footer {
 </div>
 
 <footer>
-  <span>Tracking: <span id="trackedCount">0</span> pairs</span>
-  <span>Last update: <span id="lastUpdate">--:--:--</span></span>
+  <span>Tracking: <span class="footer-val" id="trackedCount">0</span> pairs</span>
+  <span>Last update: <span class="footer-val" id="lastUpdate">--:--:-- UTC</span></span>
 </footer>
 
 <script>
@@ -462,12 +548,12 @@ function render(data) {
     document.getElementById('totalVol').innerHTML = `<span class="vol">${fmtVol(s.total_vol)}</span>`;
     if (s.best && s.best.symbol) {
       document.getElementById('bestItem').style.display = '';
-      document.getElementById('bestSym').textContent = s.best.symbol;
+      document.getElementById('bestSymLabel').textContent = s.best.symbol;
       document.getElementById('bestChg').innerHTML = `<span class="chg-positive">${fmtPct(s.best.chg_pct)}</span>`;
     }
     if (s.worst && s.worst.symbol) {
       document.getElementById('worstItem').style.display = '';
-      document.getElementById('worstSym').textContent = s.worst.symbol;
+      document.getElementById('worstSymLabel').textContent = s.worst.symbol;
       document.getElementById('worstChg').innerHTML = `<span class="chg-negative">${fmtPct(s.worst.chg_pct)}</span>`;
     }
   }
@@ -546,12 +632,13 @@ setInterval(updateUptime, 1000);
 
 function setStatus(connected) {
   const dot = statusEl.querySelector('.status-dot');
+  const text = statusEl.querySelector('span:last-child');
   if (connected) {
     dot.className = 'status-dot connected';
-    statusEl.childNodes[1].textContent = ' LIVE';
+    text.textContent = ' LIVE';
   } else {
     dot.className = 'status-dot disconnected';
-    statusEl.childNodes[1].textContent = ' DISCONNECTED';
+    text.textContent = ' DISCONNECTED';
   }
 }
 
@@ -559,8 +646,9 @@ let ws = null;
 function connectWS() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   const dot = statusEl.querySelector('.status-dot');
+  const text = statusEl.querySelector('span:last-child');
   dot.className = 'status-dot connecting';
-  statusEl.childNodes[1].textContent = ' Connecting';
+  text.textContent = ' Connecting';
 
   ws = new WebSocket(WS_URL);
   ws.onopen = () => setStatus(true);
