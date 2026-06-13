@@ -390,6 +390,31 @@ footer .footer-val { color: var(--text-secondary); font-family: var(--font-mono)
   flex-wrap: wrap;
 }
 .modal-symbol { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+.modal-live {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--green);
+  background: rgba(8, 153, 129, 0.12);
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 4px;
+}
+.modal-live::before {
+  content: '';
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
 .modal-price { font-size: 24px; font-weight: 700; font-family: var(--font-mono); }
 .modal-chg { font-size: 14px; font-weight: 600; font-family: var(--font-mono); }
 .modal-body { padding: 16px 24px 24px; }
@@ -837,25 +862,37 @@ modalOverlay.innerHTML = `<div class="modal-panel">
 document.body.appendChild(modalOverlay);
 
 let currentSymbol = null;
+let modalInterval = null;
 
-function closeModal() { modalOverlay.classList.remove('active'); currentSymbol = null; }
+function closeModal() {
+  modalOverlay.classList.remove('active');
+  currentSymbol = null;
+  if (modalInterval) { clearInterval(modalInterval); modalInterval = null; }
+}
 document.getElementById('modalClose').onclick = closeModal;
 modalOverlay.onclick = (e) => { if (e.target === modalOverlay) closeModal(); };
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 
-async function openModal(symbol) {
-  currentSymbol = symbol;
-  modalOverlay.classList.add('active');
-  document.getElementById('modalHeader').innerHTML = '';
-  document.getElementById('modalBody').innerHTML = '<div class="modal-loading"><div class="spinner"></div>Loading analysis\u2026</div>';
+async function fetchModalData(symbol) {
   try {
     const res = await fetch('/api/symbol/' + encodeURIComponent(symbol));
     const d = await res.json();
     if (d.error) throw new Error(d.error);
     renderModal(d);
   } catch(e) {
-    document.getElementById('modalBody').innerHTML = '<div class="modal-error">Failed to load data: ' + e.message + '</div>';
+    // silent on subsequent errors to avoid blinking error on reconnect
   }
+}
+
+async function openModal(symbol) {
+  if (modalInterval) { clearInterval(modalInterval); modalInterval = null; }
+  currentSymbol = symbol;
+  modalOverlay.classList.add('active');
+  document.getElementById('modalHeader').innerHTML =
+    '<span class="modal-symbol">' + symbol + '</span><span class="modal-price">\u2014</span><span class="modal-chg"></span>';
+  document.getElementById('modalBody').innerHTML = '<div class="modal-loading"><div class="spinner"></div>Loading analysis\u2026</div>';
+  await fetchModalData(symbol);
+  modalInterval = setInterval(() => fetchModalData(symbol), 2000);
 }
 
 function renderModal(d) {
@@ -863,7 +900,7 @@ function renderModal(d) {
   const p = t.price;
   const chg = t.change_pct;
   document.getElementById('modalHeader').innerHTML =
-    '<span class="modal-symbol">' + d.symbol + '</span>' +
+    '<span class="modal-symbol">' + d.symbol + '<span class="modal-live">LIVE</span></span>' +
     '<span class="modal-price ' + (chg >= 0 ? 'chg-positive' : 'chg-negative') + '">' + (p != null ? p.toFixed(2) : 'N/A') + '</span>' +
     '<span class="modal-chg ' + (chg >= 0 ? 'chg-positive' : 'chg-negative') + '">' + fmtPct(chg) + '</span>';
 
