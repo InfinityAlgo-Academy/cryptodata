@@ -222,7 +222,7 @@ async def fetch_depth(symbol: str, limit: int = 100) -> Optional[Tuple[List, Lis
         return None
 
 
-def find_walls(levels: List, cluster_pct: float = 0.2) -> Tuple[Optional[float], Optional[float]]:
+def find_walls(levels: List, cluster_pct: float = 0.2, nearest_to: Optional[float] = None) -> Tuple[Optional[float], Optional[float]]:
     if not levels:
         return None, None
     parsed = sorted(
@@ -248,7 +248,10 @@ def find_walls(levels: List, cluster_pct: float = 0.2) -> Tuple[Optional[float],
         scored.append((avg_price, total_qty))
     if not scored:
         return None, None
-    scored.sort(key=lambda x: x[1], reverse=True)
+    if nearest_to is not None:
+        scored.sort(key=lambda x: abs(x[0] - nearest_to))
+    else:
+        scored.sort(key=lambda x: x[1], reverse=True)
     best = scored[0]
     return best[0], best[1]
 
@@ -347,8 +350,9 @@ async def compute_indicators_for_symbol(symbol: str) -> Optional[dict]:
             depth = await fetch_depth(symbol, 100)
             if depth:
                 bids, asks = depth
-                bp, bq = find_walls(bids)
-                ap, aq = find_walls(asks)
+                close_price = float(klines_1h[-1][K_CLOSE])
+                bp, bq = find_walls(bids, nearest_to=close_price)
+                ap, aq = find_walls(asks, nearest_to=close_price)
                 if bp is not None:
                     result["bid_wall_price"] = bp
                     result["bid_wall_qty"] = bq
