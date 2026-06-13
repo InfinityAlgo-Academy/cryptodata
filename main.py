@@ -306,9 +306,15 @@ class ScannerUI:
             return Text(f"{ratio:.1f}x", style=color)
 
         def format_ob(price: Optional[float], ti: dict, bid: Optional[float]=None, bid_qty: Optional[float]=None, ask: Optional[float]=None, ask_qty: Optional[float]=None) -> Text:
-            def qfmt(v):
-                if v is None: return "—"
-                return f"{v/1_000_000:.2f}M"
+            def qfmt_quote(qty, pr):
+                if qty is None or pr is None or pr <= 0:
+                    return "—"
+                val = qty * pr
+                if val >= 1_000_000:
+                    return f"${val/1_000_000:.1f}M"
+                if val >= 1_000:
+                    return f"${val/1_000:.0f}K"
+                return f"${val:.0f}"
             def pfmt(v):
                 if v is None: return "—"
                 if v >= 1000: return f"{v:.2f}"
@@ -317,26 +323,30 @@ class ScannerUI:
             bw_q = ti.get("bid_wall_qty")
             aw_p = ti.get("ask_wall_price")
             aw_q = ti.get("ask_wall_qty")
-            has_walls = bw_p is not None or aw_p is not None
+            has_walls = (bw_p is not None and bw_q is not None and bw_q * (price or 0) >= 50_000
+                         ) or (aw_p is not None and aw_q is not None and aw_q * (price or 0) >= 50_000)
             bar = Text("│", style="dim")
             if has_walls:
                 parts = []
-                if bw_p is not None and bw_q is not None:
-                    parts.append(Text(f"B {pfmt(bw_p)} {qfmt(bw_q)}", style="bold green"))
+                if bw_p is not None and bw_q is not None and bw_q * (price or 0) >= 50_000:
+                    parts.append(Text(f"B {pfmt(bw_p)} {qfmt_quote(bw_q, price)}", style="bold green"))
                 else:
                     parts.append(Text("B —", style="dim"))
                 parts.append(bar)
-                if aw_p is not None and aw_q is not None:
-                    parts.append(Text(f"S {pfmt(aw_p)} {qfmt(aw_q)}", style="bold red"))
+                if aw_p is not None and aw_q is not None and aw_q * (price or 0) >= 50_000:
+                    parts.append(Text(f"S {pfmt(aw_p)} {qfmt_quote(aw_q, price)}", style="bold red"))
                 else:
                     parts.append(Text("S —", style="dim"))
                 return Text.assemble(*parts)
             if bid is not None and bid_qty is not None and ask is not None and ask_qty is not None:
-                return Text.assemble(
-                    Text(f"{pfmt(bid)} {qfmt(bid_qty)}", style="green"),
-                    bar,
-                    Text(f"{pfmt(ask)} {qfmt(ask_qty)}", style="red"),
-                )
+                bid_val = bid_qty * (price or 0)
+                ask_val = ask_qty * (price or 0)
+                if bid_val >= 50_000 or ask_val >= 50_000:
+                    return Text.assemble(
+                        Text(f"{pfmt(bid)} {qfmt_quote(bid_qty, price)}", style="green"),
+                        bar,
+                        Text(f"{pfmt(ask)} {qfmt_quote(ask_qty, price)}", style="red"),
+                    )
             return Text("—", style="dim")
 
         def format_vwap(price: Optional[float], vwap: Optional[float]) -> Text:
@@ -366,21 +376,25 @@ class ScannerUI:
                 return Text("⬆", style="bold green")
             return Text("⬇", style="bold red")
 
-        def format_whales(ti: dict, bid_qty: Optional[float]=None, ask_qty: Optional[float]=None) -> Text:
+        def format_whales(ti: dict, price: Optional[float]=None, bid_qty: Optional[float]=None, ask_qty: Optional[float]=None) -> Text:
+            def qval(q, pr):
+                if q is None or pr is None or pr <= 0:
+                    return 0.0
+                return q * pr
             bw_q = ti.get("bid_wall_qty")
             aw_q = ti.get("ask_wall_qty")
-            if bw_q is not None or aw_q is not None:
-                max_q = max(bw_q or 0, aw_q or 0)
-                side = "B" if (bw_q or 0) >= (aw_q or 0) else "S"
-                qfmt = f"{max_q/1_000_000:.2f}M" if max_q >= 1_000_000 else f"{max_q/1_000:.2f}K"
-                color = "bold green" if side == "B" else "bold red"
-                return Text(f"{side} {qfmt}", style=color)
-            if bid_qty is not None or ask_qty is not None:
-                max_q = max(bid_qty or 0, ask_qty or 0)
-                side = "B" if (bid_qty or 0) >= (ask_qty or 0) else "S"
-                qfmt = f"{max_q/1_000_000:.2f}M" if max_q >= 1_000_000 else f"{max_q/1_000:.2f}K"
-                color = "bold green" if side == "B" else "bold red"
-                return Text(f"{side} {qfmt}", style=color)
+            bv = qval(bw_q, price)
+            av = qval(aw_q, price)
+            if bv >= 50_000 or av >= 50_000:
+                side = "B" if bv >= av else "S"
+                val = bv if side == "B" else av
+                return Text(f"{side} ${val/1_000_000:.2f}M" if val >= 1_000_000 else f"{side} ${val/1_000:.0f}K", style="bold green" if side == "B" else "bold red")
+            bv = qval(bid_qty, price)
+            av = qval(ask_qty, price)
+            if bv >= 50_000 or av >= 50_000:
+                side = "B" if bv >= av else "S"
+                val = bv if side == "B" else av
+                return Text(f"{side} ${val/1_000_000:.2f}M" if val >= 1_000_000 else f"{side} ${val/1_000:.0f}K", style="bold green" if side == "B" else "bold red")
             return Text("—", style="dim")
 
         def score_signal(rsi: Optional[float], bb_pct: Optional[float], fib_pct: Optional[float],
@@ -555,7 +569,7 @@ class ScannerUI:
             spread_text = format_spread(bid, ask, pr_float)
             ob_text = format_ob(pr_float, ti, bid, bid_qty, ask, ask_qty)
             rvol_text = format_rvol(vol, avg_vol_val)
-            whales_text = format_whales(ti, bid_qty, ask_qty)
+            whales_text = format_whales(ti, pr_float, bid_qty, ask_qty)
             vwap_text = format_vwap(pr_float, vwap_val)
             ma20_text = format_ma_dist(pr_float, ma20_val)
             ma50_text = format_ma_dist(pr_float, ma50_val)
