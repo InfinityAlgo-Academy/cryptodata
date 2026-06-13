@@ -1231,8 +1231,14 @@ renderModal = function(d) {
   if (d.chart) setTimeout(() => drawSparkline(d.chart), 50);
 };
 
-// Click handler on table rows
+// Click handler: symbol cell → chart in new tab, rest of row → modal
 document.getElementById('tableBody').addEventListener('click', (e) => {
+  const symTd = e.target.closest('td.symbol');
+  if (symTd) {
+    const sym = symTd.textContent.trim();
+    window.open('/chart/' + encodeURIComponent(sym), '_blank');
+    return;
+  }
   const tr = e.target.closest('tr');
   if (!tr) return;
   const td = tr.querySelector('td.symbol');

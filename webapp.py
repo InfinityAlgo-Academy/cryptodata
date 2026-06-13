@@ -597,7 +597,65 @@ async def root():
         return HTMLResponse(f.read())
 
 
-@app.get("/api/health")
+@app.get("/chart/{symbol}")
+async def chart_page(symbol: str):
+    """Standalone TradingView chart page for a symbol."""
+    # Map symbols to TradingView format
+    tv_map = {
+        "GC=F": "COMEX:GC1!",
+    }
+    tv_symbol = tv_map.get(symbol.upper(), f"BINANCE:{symbol.upper()}")
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{symbol} — TradingView Chart</title>
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  html, body {{ height:100%; overflow:hidden; background:#131722; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }}
+  body {{ display:flex; flex-direction:column; }}
+  .top {{ display:flex; align-items:center; justify-content:space-between; padding:8px 16px; background:#1e222d; border-bottom:1px solid #2a2e39; flex-shrink:0; }}
+  .top h2 {{ color:#d1d4dc; font-size:14px; font-weight:600; }}
+  .top h2 span {{ color:#787b86; font-weight:400; }}
+  .top a {{ color:#2962ff; text-decoration:none; font-size:12px; padding:4px 12px; border:1px solid #2962ff; border-radius:4px; transition:all 0.15s; }}
+  .top a:hover {{ background:#2962ff; color:#fff; }}
+  #tvchart {{ flex:1; min-height:0; }}
+</style>
+</head>
+<body>
+<div class="top">
+  <h2>{symbol} <span>— Candlestick Chart</span></h2>
+  <a href="https://www.tradingview.com/chart/?symbol={tv_symbol}" target="_blank" rel="noopener">Open in TradingView &rarr;</a>
+</div>
+<div id="tvchart"></div>
+<script src="https://s3.tradingview.com/tv.js"></script>
+<script>
+new TradingView.widget({{
+  container_id: "tvchart",
+  autosize: true,
+  symbol: "{tv_symbol}",
+  interval: "60",
+  timezone: "Etc/UTC",
+  theme: "dark",
+  style: "1",
+  locale: "en",
+  enable_publishing: false,
+  hide_top_toolbar: false,
+  hide_legend: false,
+  save_image: false,
+  studies: ["Volume@tv-basicstudies"],
+  show_popup_button: true,
+  popup_width: "1000",
+  popup_height: "650",
+  withdateranges: true,
+  range: "12M",
+}});
+</script>
+</body>
+</html>"""
+    return HTMLResponse(html)
 async def health():
     return {"status": "ok", "symbols": len(store.symbols) if store else 0, "clients": len(manager.active)}
 
