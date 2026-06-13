@@ -574,11 +574,15 @@ async def health():
 
 @app.get("/api/data")
 async def api_data():
-    if manager.latest_data:
-        return manager.latest_data
-    if store and rsi_store and tech_store:
-        return await compute_display_data(store, rsi_store, tech_store)
-    return {"type": "update", "rows": [], "summary": {}}
+    try:
+        if manager.latest_data:
+            return manager.latest_data
+        if store and rsi_store and tech_store:
+            return await compute_display_data(store, rsi_store, tech_store)
+    except Exception as e:
+        log.error("/api/data error: %s", e)
+    return {"type": "update", "rows": [], "summary": {"gainers": 0, "losers": 0, "total": 0,
+            "avg_chg": 0.0, "total_vol": 0, "best": None, "worst": None}}
 
 
 @app.websocket("/ws")
