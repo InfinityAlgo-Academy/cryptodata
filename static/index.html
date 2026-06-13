@@ -340,6 +340,138 @@ footer .footer-val { color: var(--text-secondary); font-family: var(--font-mono)
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-text { color: var(--text-dim); font-size: 13px; }
 
+/* === MODAL OVERLAY === */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+.modal-overlay.active { display: flex; }
+.modal-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 780px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  position: relative;
+}
+.modal-panel::-webkit-scrollbar { width: 5px; }
+.modal-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.modal-close {
+  position: absolute;
+  top: 12px; right: 16px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  transition: background 0.15s;
+  z-index: 10;
+}
+.modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.modal-symbol { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+.modal-price { font-size: 24px; font-weight: 700; font-family: var(--font-mono); }
+.modal-chg { font-size: 14px; font-weight: 600; font-family: var(--font-mono); }
+.modal-body { padding: 16px 24px 24px; }
+.modal-section { margin-bottom: 20px; }
+.modal-section:last-child { margin-bottom: 0; }
+.modal-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+}
+.modal-grid-3 { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.modal-item {
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.modal-item-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); margin-bottom: 3px; }
+.modal-item-value { font-family: var(--font-mono); font-size: 13px; font-weight: 600; }
+.modal-item-sub { font-size: 10px; color: var(--text-secondary); font-family: var(--font-mono); margin-top: 1px; }
+.modal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.modal-table th {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 9px;
+  padding: 6px 10px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+.modal-table td {
+  padding: 5px 10px;
+  text-align: center;
+  border-bottom: 1px solid rgba(43,49,57,0.4);
+}
+.modal-table tr:last-child td { border-bottom: none; }
+.modal-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.modal-error {
+  color: var(--red);
+  text-align: center;
+  padding: 20px;
+}
+
+/* Modal utility classes */
+.rsi-overbought { color: #f23645 !important; }
+.rsi-oversold   { color: #089981 !important; }
+.macd-positive  { color: #089981 !important; }
+.macd-negative  { color: #f23645 !important; }
+.div-bullish    { color: #089981 !important; }
+.div-bearish    { color: #f23645 !important; }
+.fib-zone       { color: var(--yellow) !important; font-weight: 700; }
+.spread-good    { color: #089981 !important; }
+.spread-mid     { color: var(--yellow) !important; }
+.spread-bad     { color: #f23645 !important; }
+.atr-high       { color: #f23645 !important; }
+.atr-mid        { color: var(--yellow) !important; }
+.atr-low        { color: #089981 !important; }
+
 /* === RESPONSIVE === */
 @media (max-width: 768px) {
   header { padding: 0 12px; }
@@ -693,6 +825,159 @@ async function fetchInitial() {
 }
 fetchInitial();
 setInterval(() => { if (ws && ws.readyState === WebSocket.OPEN) ws.send('ping'); }, 30000);
+
+// === MODAL ===
+const modalOverlay = document.createElement('div');
+modalOverlay.className = 'modal-overlay';
+modalOverlay.innerHTML = `<div class="modal-panel">
+  <button class="modal-close" id="modalClose">&times;</button>
+  <div class="modal-header" id="modalHeader"></div>
+  <div class="modal-body" id="modalBody"></div>
+</div>`;
+document.body.appendChild(modalOverlay);
+
+let currentSymbol = null;
+
+function closeModal() { modalOverlay.classList.remove('active'); currentSymbol = null; }
+document.getElementById('modalClose').onclick = closeModal;
+modalOverlay.onclick = (e) => { if (e.target === modalOverlay) closeModal(); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+
+async function openModal(symbol) {
+  currentSymbol = symbol;
+  modalOverlay.classList.add('active');
+  document.getElementById('modalHeader').innerHTML = '';
+  document.getElementById('modalBody').innerHTML = '<div class="modal-loading"><div class="spinner"></div>Loading analysis\u2026</div>';
+  try {
+    const res = await fetch('/api/symbol/' + encodeURIComponent(symbol));
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+    renderModal(d);
+  } catch(e) {
+    document.getElementById('modalBody').innerHTML = '<div class="modal-error">Failed to load data: ' + e.message + '</div>';
+  }
+}
+
+function renderModal(d) {
+  const t = d.ticker || {};
+  const p = t.price;
+  const chg = t.change_pct;
+  document.getElementById('modalHeader').innerHTML =
+    '<span class="modal-symbol">' + d.symbol + '</span>' +
+    '<span class="modal-price ' + (chg >= 0 ? 'chg-positive' : 'chg-negative') + '">' + (p != null ? p.toFixed(2) : 'N/A') + '</span>' +
+    '<span class="modal-chg ' + (chg >= 0 ? 'chg-positive' : 'chg-negative') + '">' + fmtPct(chg) + '</span>';
+
+  let body = '';
+
+  // Ticker Stats
+  body += '<div class="modal-section"><div class="modal-section-title">Ticker Stats</div><div class="modal-grid">' +
+    modalItem('24h High', fmtPrice(t.high)) +
+    modalItem('24h Low', fmtPrice(t.low)) +
+    modalItem('Volume', fmtVol(t.volume)) +
+    modalItem('Bid', t.bid != null ? t.bid.toFixed(2) : 'N/A') +
+    modalItem('Ask', t.ask != null ? t.ask.toFixed(2) : 'N/A') +
+    modalItem('Spread', t.spread_bps != null ? t.spread_bps.toFixed(1) + ' bps' : 'N/A', t.spread_bps != null ? (t.spread_bps < 5 ? 'spread-good' : t.spread_bps < 20 ? 'spread-mid' : 'spread-bad') : '') +
+    '</div></div>';
+
+  // Moving Averages
+  if (d.moving_averages && Object.keys(d.moving_averages).length) {
+    let maHtml = '<div class="modal-section"><div class="modal-section-title">Moving Averages</div><div class="modal-grid modal-grid-3">';
+    for (const [name, ma] of Object.entries(d.moving_averages)) {
+      const cls = ma.dist_pct >= 0 ? 'chg-positive' : 'chg-negative';
+      maHtml += modalItem(name.toUpperCase(), ma.value.toFixed(2), cls, (ma.dist_pct >= 0 ? '+' : '') + ma.dist_pct.toFixed(2) + '%');
+    }
+    maHtml += '</div></div>';
+    body += maHtml;
+  }
+
+  // Oscillators
+  body += '<div class="modal-section"><div class="modal-section-title">Oscillators</div><div class="modal-grid modal-grid-3">';
+  if (d.rsi) {
+    const rsi5Cls = d.rsi.rsi_5 > 90 ? 'rsi-overbought' : d.rsi.rsi_5 < 10 ? 'rsi-oversold' : '';
+    const rsi14Cls = d.rsi.rsi_14 > 70 ? 'rsi-overbought' : d.rsi.rsi_14 < 30 ? 'rsi-oversold' : '';
+    body += modalItem('RSI(5)', d.rsi.rsi_5 != null ? d.rsi.rsi_5.toFixed(1) : 'N/A', rsi5Cls);
+    body += modalItem('RSI(14)', d.rsi.rsi_14 != null ? d.rsi.rsi_14.toFixed(1) : 'N/A', rsi14Cls);
+  }
+  if (d.macd && d.macd.macd != null) {
+    const macdCls = d.macd.macd >= 0 ? 'macd-positive' : 'macd-negative';
+    const histCls = d.macd.macd_histogram >= 0 ? 'macd-positive' : 'macd-negative';
+    body += modalItem('MACD', d.macd.macd.toFixed(2), macdCls);
+    body += modalItem('Signal', d.macd.macd_signal != null ? d.macd.macd_signal.toFixed(2) : 'N/A');
+    body += modalItem('Histogram', d.macd.macd_histogram != null ? (d.macd.macd_histogram >= 0 ? '+' : '') + d.macd.macd_histogram.toFixed(2) : 'N/A', histCls);
+    body += modalItem('Divergence', d.macd.divergence ? (d.macd.divergence === 'bullish' ? '\u2B06 Bullish' : '\u2B07 Bearish') : '\u2014', d.macd.divergence === 'bullish' ? 'div-bullish' : d.macd.divergence === 'bearish' ? 'div-bearish' : '');
+  }
+  body += '</div></div>';
+
+  // Bollinger Bands
+  if (d.bollinger && d.bollinger.bb_upper != null) {
+    body += '<div class="modal-section"><div class="modal-section-title">Bollinger Bands (20, 2)</div><div class="modal-grid modal-grid-3">' +
+      modalItem('Upper', d.bollinger.bb_upper.toFixed(2)) +
+      modalItem('Middle', d.bollinger.bb_middle.toFixed(2)) +
+      modalItem('Lower', d.bollinger.bb_lower.toFixed(2)) +
+      modalItem('BB%', d.bollinger_pct != null ? d.bollinger_pct.toFixed(1) + '%' : 'N/A', d.bollinger_pct > 85 ? 'bb-high' : d.bollinger_pct < 15 ? 'bb-low' : '') +
+      '</div></div>';
+  }
+
+  // Fibonacci Levels
+  if (d.fib_levels && d.fib_levels.length) {
+    let fibHtml = '<div class="modal-section"><div class="modal-section-title">Fibonacci Levels (100 1h candles)</div><table class="modal-table"><thead><tr><th>Level</th><th>Price</th><th>Dist %</th></tr></thead><tbody>';
+    for (const f of d.fib_levels) {
+      const cls = f.label === '50%' || f.label === '61.8%' ? (f.dist_pct >= 0 && f.dist_pct <= 10 ? 'fib-zone' : '') : '';
+      const distCls = f.dist_pct >= 0 ? 'chg-positive' : 'chg-negative';
+      fibHtml += '<tr><td>' + f.label + '</td><td class="' + cls + '">' + f.value.toFixed(2) + '</td><td class="' + distCls + '">' + (f.dist_pct >= 0 ? '+' : '') + f.dist_pct.toFixed(2) + '%</td></tr>';
+    }
+    fibHtml += '</tbody></table></div>';
+    body += fibHtml;
+  }
+
+  // Pivot Points
+  if (d.pivot_points && Object.keys(d.pivot_points).length) {
+    let pvHtml = '<div class="modal-section"><div class="modal-section-title">Pivot Points</div><table class="modal-table"><thead><tr><th>R3</th><th>R2</th><th>R1</th><th>Pivot</th><th>S1</th><th>S2</th><th>S3</th></tr></thead><tbody><tr>';
+    for (const key of ['r3', 'r2', 'r1', 'pivot', 's1', 's2', 's3']) {
+      const v = d.pivot_points[key];
+      pvHtml += '<td>' + (v != null ? v.toFixed(2) : '\u2014') + '</td>';
+    }
+    pvHtml += '</tr></tbody></table></div>';
+    body += pvHtml;
+  }
+
+  // Other
+  body += '<div class="modal-section"><div class="modal-section-title">Other Indicators</div><div class="modal-grid modal-grid-3">' +
+    modalItem('VWAP', d.vwap != null ? d.vwap.toFixed(2) : 'N/A') +
+    modalItem('ATR', d.atr != null ? d.atr.toFixed(2) : 'N/A') +
+    modalItem('ATR %', d.atr_pct != null ? d.atr_pct.toFixed(2) + '%' : 'N/A', d.atr_pct > 5 ? 'atr-high' : d.atr_pct > 2 ? 'atr-mid' : 'atr-low') +
+    modalItem('Avg Vol (24h)', d.avg_volume != null ? fmtVol(d.avg_volume) : 'N/A') +
+    '</div></div>';
+
+  // Order Book Walls
+  if (d.order_book_walls && (d.order_book_walls.bid || d.order_book_walls.ask)) {
+    let wallsHtml = '<div class="modal-section"><div class="modal-section-title">Order Book Walls</div><div class="modal-grid modal-grid-3">';
+    if (d.order_book_walls.bid) {
+      const w = d.order_book_walls.bid;
+      wallsHtml += modalItem('Bid Wall', '$' + w.value.toLocaleString(), 'whales-bid', 'Price: ' + w.price.toFixed(2));
+    }
+    if (d.order_book_walls.ask) {
+      const w = d.order_book_walls.ask;
+      wallsHtml += modalItem('Ask Wall', '$' + w.value.toLocaleString(), 'whales-ask', 'Price: ' + w.price.toFixed(2));
+    }
+    wallsHtml += '</div></div>';
+    body += wallsHtml;
+  }
+
+  document.getElementById('modalBody').innerHTML = body;
+}
+
+function modalItem(label, value, cls = '', sub = '') {
+  return '<div class="modal-item' + (cls ? ' ' + cls : '') + '"><div class="modal-item-label">' + label + '</div><div class="modal-item-value ' + cls + '">' + value + '</div>' + (sub ? '<div class="modal-item-sub">' + sub + '</div>' : '') + '</div>';
+}
+
+// Click handler on table rows
+document.getElementById('tableBody').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr');
+  if (!tr) return;
+  const td = tr.querySelector('td.symbol');
+  if (td) openModal(td.textContent.trim());
+});
 </script>
 </body>
 </html>

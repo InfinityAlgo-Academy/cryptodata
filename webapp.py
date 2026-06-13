@@ -589,6 +589,112 @@ async def api_data():
             "avg_chg": 0.0, "total_vol": 0, "best": None, "worst": None}}
 
 
+def _fib_label(level: float) -> str:
+    if level is None: return None
+    # Map a fib level value to its label
+    return None
+
+
+@app.get("/api/symbol/{symbol}")
+async def api_symbol(symbol: str):
+    try:
+        tick = await store.get_tick(symbol) if store else None
+        tech = await tech_store.get(symbol) if tech_store else {}
+        if not tech:
+            tech = {}
+        price = float(tick["last_price"]) if tick and tick.get("last_price") is not None else None
+
+        # RSI from rsi_store
+        rsi_5 = None
+        rsi_14 = None
+        if price is not None and rsi_store:
+            series = await rsi_store.get_series(symbol, price)
+            rsi_5 = calculate_rsi(series, 5)
+            rsi_14 = calculate_rsi(series, 14)
+
+        # Fib levels with labels
+        fib_levels = []
+        for label, key in [("0%", "fib_low"), ("23.6%", None), ("38.2%", None),
+                           ("50%", "fib_50"), ("61.8%", "fib_618"),
+                           ("100%", "fib_high"), ("127.2%", "fib_127"), ("161.8%", "fib_161")]:
+            val = tech.get(key) if key else None
+            if val is not None:
+                dist = ((val - price) / price * 100) if price and price != 0 else None
+                fib_levels.append({"label": label, "value": round(val, 4), "dist_pct": round(dist, 2) if dist is not None else None})
+
+        # Pivot points
+        pivots = {}
+        for k in ["pivot", "r1", "r2", "r3", "s1", "s2", "s3"]:
+            v = tech.get(k)
+            if v is not None:
+                pivots[k] = round(v, 4)
+
+        # Moving averages
+        mas = {}
+        for k in ["sma20", "sma50", "sma200"]:
+            v = tech.get(k)
+            if v is not None:
+                dist = ((price - v) / v * 100) if price and v != 0 else None
+                mas[k] = {"value": round(v, 4), "dist_pct": round(dist, 2) if dist is not None else None}
+
+        # Bollinger
+        bb = {}
+        for k in ["bb_upper", "bb_middle", "bb_lower"]:
+            v = tech.get(k)
+            if v is not None:
+                bb[k] = round(v, 4)
+        bb_pct = None
+        if bb.get("bb_upper") and bb.get("bb_lower") and bb["bb_upper"] != bb["bb_lower"] and price is not None:
+            bb_pct = round((price - bb["bb_lower"]) / (bb["bb_upper"] - bb["bb_lower"]) * 100, 1)
+
+        # MACD
+        macd = {}
+        for k in ["macd", "macd_signal", "macd_histogram"]:
+            v = tech.get(k)
+            if v is not None:
+                macd[k] = round(v, 2)
+        macd["divergence"] = tech.get("macd_divergence")
+
+        # Walls
+        walls = {}
+        for side in ["bid", "ask"]:
+            p = tech.get(f"{side}_wall_price")
+            q = tech.get(f"{side}_wall_qty")
+            if p is not None and q is not None and price:
+                val = q * price
+                walls[side] = {"price": round(p, 4), "qty": round(q, 2), "value": round(val)}
+
+        return {
+            "symbol": symbol,
+            "ticker": {
+                "price": price,
+                "change_pct": round(float(tick["price_change_pct"]), 2) if tick and tick.get("price_change_pct") is not None else None,
+                "volume": tick.get("volume") if tick else None,
+                "high": tick.get("high_24h") if tick else None,
+                "low": tick.get("low_24h") if tick else None,
+                "bid": tick.get("bid_price") if tick else None,
+                "ask": tick.get("ask_price") if tick else None,
+                "spread_bps": round((float(tick["ask_price"]) - float(tick["bid_price"])) / price * 10000, 1) if tick and tick.get("bid_price") is not None and tick.get("ask_price") is not None and price and price != 0 else None,
+            } if tick else None,
+            "rsi": {"rsi_5": round(rsi_5, 1) if rsi_5 is not None else None, "rsi_14": round(rsi_14, 1) if rsi_14 is not None else None},
+            "rsi_divergence": tech.get("rsi5_divergence"),
+            "moving_averages": mas,
+            "bollinger": bb,
+            "bollinger_pct": bb_pct,
+            "vwap": round(tech["vwap"], 4) if tech.get("vwap") else None,
+            "atr": round(tech["atr"], 4) if tech.get("atr") else None,
+            "atr_pct": round(tech["atr"] / price * 100, 2) if tech.get("atr") and price and price != 0 else None,
+            "avg_volume": round(tech["avg_vol"], 2) if tech.get("avg_vol") else None,
+            "macd": macd,
+            "fib_levels": fib_levels,
+            "pivot_points": pivots,
+            "order_book_walls": walls,
+        }
+    except Exception as e:
+        log.error("api_symbol error for %s: %s", symbol, e)
+        return {"error": str(e)}
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await manager.connect(ws)
