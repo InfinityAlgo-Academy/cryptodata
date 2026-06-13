@@ -632,6 +632,7 @@ body{display:flex;flex-direction:column}
 <div class="loading" id="loading"><div class="spinner"></div>Loading 5000 candles&hellip;</div>
 <div id="error"></div>
 <div class="loading" id="realtime" style="display:none;flex:0;padding:6px;font-size:11px;color:#5b9cf5">Connecting real-time&hellip;</div>
+<div id="chart"></div>
 <script src="https://unpkg.com/lightweight-charts@4.0.1/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 const sym = '""" + symbol + r"""';
