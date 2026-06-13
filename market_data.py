@@ -159,7 +159,10 @@ class DataFrameManager:
         new_rows = pd.DataFrame(snapshot, columns=config.DATAFRAME_COLUMNS)
 
         async with self._lock:
-            self._df = pd.concat([self._df, new_rows], ignore_index=True)
+            if self._df.empty:
+                self._df = new_rows
+            else:
+                self._df = pd.concat([self._df, new_rows], ignore_index=True)
 
             # ---- Memory guard: keep only the most recent N rows ----
             if len(self._df) > config.MAX_DATAFRAME_ROWS:
