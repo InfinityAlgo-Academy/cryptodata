@@ -597,6 +597,119 @@ async def root():
         return HTMLResponse(f.read())
 
 
+@app.get("/chart/{symbol}")
+async def chart_page(symbol: str):
+    """Standalone candlestick chart page using TradingView Lightweight Charts."""
+    html = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>""" + symbol + r""" — Chart</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#131722;color:#d1d4dc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+body{display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:12px;padding:8px 16px;background:#1e222d;border-bottom:1px solid #2a2e39;flex-shrink:0}
+.top h2{font-size:14px;font-weight:600}
+.top h2 span{color:#787b86;font-weight:400;font-size:12px}
+.loading{flex:1;display:flex;align-items:center;justify-content:center;color:#787b86;font-size:13px;gap:8px}
+.spinner{width:16px;height:16px;border:2px solid #2a2e39;border-top-color:#2962ff;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#chart{flex:1;min-height:0;display:none}
+#error{flex:1;display:none;align-items:center;justify-content:center;color:#f23645;font-size:13px;flex-direction:column;gap:8px}
+#error a{color:#2962ff;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="top">
+  <h2>""" + symbol + r""" <span>— Candlestick</span></h2>
+  <a href="https://www.tradingview.com/chart/?symbol=BINANCE:""" + symbol + r"""" target="_blank" rel="noopener" style="margin-left:auto;color:#2962ff;text-decoration:none;font-size:11px">TradingView ↗</a>
+</div>
+<div class="loading" id="loading"><div class="spinner"></div>Loading 5000 candles&hellip;</div>
+<div id="error"></div>
+<div id="chart"></div>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+const sym = '""" + symbol + r"""';
+
+async function fetchKlines(endTime) {
+  const url = 'https://api.binance.com/api/v3/klines?symbol=' + sym + '&interval=1h&limit=1000' +
+    (endTime ? '&endTime=' + endTime : '');
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Binance API error ' + res.status);
+  return await res.json();
+}
+
+async function loadChart() {
+  try {
+    let all = [];
+    let endTime = Date.now();
+    for (let i = 0; i < 5; i++) {
+      const k = await fetchKlines(endTime);
+      if (!k || !k.length) break;
+      all = k.concat(all);
+      endTime = k[0][0] - 1;
+      if (k.length < 1000) break;
+    }
+    all = all.slice(-5000);
+    if (all.length < 20) throw new Error('Not enough data (got ' + all.length + ' candles)');
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('chart').style.display = 'block';
+
+    const chart = LightweightCharts.createChart(document.getElementById('chart'), {
+      layout: { background: { color: '#131722' }, textColor: '#d1d4dc' },
+      grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: '#2a2e39' },
+      timeScale: { borderColor: '#2a2e39', timeVisible: true, secondsVisible: false },
+      handleScroll: { vertTouchDrag: true },
+    });
+
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: '#089981', downColor: '#f23645',
+      borderUpColor: '#089981', borderDownColor: '#f23645',
+      wickUpColor: '#089981', wickDownColor: '#f23645',
+    });
+
+    const volumeSeries = chart.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'volume',
+    });
+    chart.priceScale('volume').applyOptions({
+      scaleMargins: { top: 0.85, bottom: 0 },
+    });
+
+    const cdata = [], vdata = [];
+    let prevClose = all[0][4];
+    for (const k of all) {
+      const t = Math.floor(k[0] / 1000);
+      cdata.push({ time: t, open: parseFloat(k[1]), high: parseFloat(k[2]), low: parseFloat(k[3]), close: parseFloat(k[4]) });
+      const vol = parseFloat(k[5]);
+      vdata.push({ time: t, value: vol, color: parseFloat(k[4]) >= parseFloat(k[1]) ? 'rgba(8,153,129,0.3)' : 'rgba(242,54,69,0.3)' });
+    }
+
+    candleSeries.setData(cdata);
+    volumeSeries.setData(vdata);
+    chart.timeScale().fitContent();
+    chart.timeScale().scrollToPosition(-5);
+
+    window.addEventListener('resize', () => chart.applyOptions({ width: document.getElementById('chart').clientWidth }));
+  } catch (e) {
+    document.getElementById('loading').style.display = 'none';
+    const err = document.getElementById('error');
+    err.style.display = 'flex';
+    err.innerHTML = '<div>Failed to load chart: ' + e.message + '</div>' +
+      '<a href="https://www.tradingview.com/chart/?symbol=BINANCE:' + sym + '" target="_blank" rel="noopener">Open in TradingView instead &rarr;</a>';
+  }
+}
+loadChart();
+</script>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "symbols": len(store.symbols) if store else 0, "clients": len(manager.active)}
