@@ -28,6 +28,7 @@ import yahoo_finance
 from market_data import MarketDataStore, DataFrameManager, TickData
 from technical_indicators import TechnicalIndicatorStore, indicators_update_task
 from websocket_client import BinanceWebSocketClient, fetch_top_symbols
+from futures_extras import FuturesExtrasStore, futures_extras_task
 
 log = utils.get_logger("webapp")
 
@@ -64,6 +65,28 @@ class RSIKlinesStore:
             if symbol not in self.closes or not self.closes[symbol]:
                 return pd.Series([current_price])
             return pd.Series(self.closes[symbol][:-1] + [current_price])
+
+    async def get_chart_data(self, symbol: str, current_price: float) -> Optional[Dict]:
+        async with self.lock:
+            if symbol not in self.closes or not self.closes[symbol]:
+                return None
+            raw = self.closes[symbol]
+            closes = raw + [current_price]
+            step = max(1, len(closes) // 100)
+            sampled = closes[::step]
+            if sampled[-1] != closes[-1]:
+                sampled[-1] = closes[-1]
+            mn = min(closes)
+            mx = max(closes)
+            rng = mx - mn if mx != mn else 1
+            normalized = [round((c - mn) / rng * 100, 1) for c in sampled]
+            return {
+                "prices": [round(c, 2) for c in sampled],
+                "normalized": normalized,
+                "min": round(mn, 2),
+                "max": round(mx, 2),
+                "current": round(closes[-1], 2),
+            }
 
 
 async def compute_all_rsi_realtime(snapshot, rsi_store):
@@ -413,6 +436,7 @@ store: MarketDataStore = None
 df_manager: DataFrameManager = None
 rsi_store: RSIKlinesStore = None
 tech_store: TechnicalIndicatorStore = None
+futures_extras_store: FuturesExtrasStore = None
 ws_client: BinanceWebSocketClient = None
 shutdown_event: asyncio.Event = None
 bg_tasks: List[asyncio.Task] = []
@@ -497,7 +521,7 @@ async def yahoo_indicators_task():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global store, df_manager, rsi_store, tech_store, ws_client, shutdown_event, bg_tasks
+    global store, df_manager, rsi_store, tech_store, futures_extras_store, ws_client, shutdown_event, bg_tasks
 
     utils.setup_logging()
     log.info("Starting web application")
@@ -519,6 +543,7 @@ async def lifespan(app: FastAPI):
     df_manager = DataFrameManager()
     rsi_store = RSIKlinesStore()
     tech_store = TechnicalIndicatorStore()
+    futures_extras_store = FuturesExtrasStore()
     shutdown_event = asyncio.Event()
 
     ws_client = BinanceWebSocketClient(
@@ -533,6 +558,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(indicators_update_task(symbols, tech_store, shutdown_event), name="indicators"),
         asyncio.create_task(yahoo_poll_task(), name="yahoo_poll"),
         asyncio.create_task(yahoo_indicators_task(), name="yahoo_ind"),
+        asyncio.create_task(futures_extras_task(all_sym, futures_extras_store, shutdown_event), name="futures_extras"),
     ]
 
     log.info("All background tasks started")
@@ -664,6 +690,20 @@ async def api_symbol(symbol: str):
                 val = q * price
                 walls[side] = {"price": round(p, 4), "qty": round(q, 2), "value": round(val)}
 
+        # Fear & Greed
+        fg = futures_extras_store.get_fear_greed() if futures_extras_store else None
+
+        # Futures extras
+        fx = await futures_extras_store.get(symbol) if futures_extras_store else {}
+        funding = fx.get("funding")
+        oi = fx.get("open_interest")
+        lsr = fx.get("long_short_ratio")
+        liq = fx.get("liquidations")
+        ob = fx.get("orderbook")
+
+        # Chart data (sparkline)
+        chart = await rsi_store.get_chart_data(symbol, price) if price is not None and rsi_store else None
+
         return {
             "symbol": symbol,
             "ticker": {
@@ -689,6 +729,13 @@ async def api_symbol(symbol: str):
             "fib_levels": fib_levels,
             "pivot_points": pivots,
             "order_book_walls": walls,
+            "fear_greed": fg,
+            "funding_rate": funding,
+            "open_interest": oi,
+            "long_short_ratio": lsr,
+            "liquidations": liq,
+            "orderbook": ob,
+            "chart": chart,
         }
     except Exception as e:
         log.error("api_symbol error for %s: %s", symbol, e)

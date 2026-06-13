@@ -497,6 +497,61 @@ footer .footer-val { color: var(--text-secondary); font-family: var(--font-mono)
 .atr-mid        { color: var(--yellow) !important; }
 .atr-low        { color: #089981 !important; }
 
+/* Chart sparkline */
+.modal-chart-wrap {
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 4px;
+}
+.modal-chart-wrap canvas {
+  display: block;
+  width: 100%;
+  height: 80px;
+  border-radius: 4px;
+}
+
+/* Fear & Greed */
+.fg-extreme-fear { color: #f23645 !important; }
+.fg-fear         { color: #f77c5a !important; }
+.fg-neutral      { color: var(--yellow) !important; }
+.fm-greed        { color: #a8d66d !important; }
+.fg-extreme-greed{ color: #089981 !important; }
+
+/* Liquidations */
+.liq-long  { color: #089981 !important; }
+.liq-short { color: #f23645 !important; }
+
+/* Order book depth table */
+.depth-bid { color: #089981 !important; }
+.depth-ask { color: #f23645 !important; }
+.depth-bar-wrap {
+  width: 100%;
+  height: 3px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 2px;
+  margin-top: 3px;
+  overflow: hidden;
+}
+.depth-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+/* Sumo badges */
+.sumobadge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+.sumobadge-green  { background: rgba(8,153,129,0.15); color: #089981; }
+.sumobadge-red    { background: rgba(242,54,69,0.15); color: #f23645; }
+.sumobadge-yellow { background: rgba(242,202,54,0.15); color: var(--yellow); }
+
 /* === RESPONSIVE === */
 @media (max-width: 768px) {
   header { padding: 0 12px; }
@@ -978,6 +1033,106 @@ function renderModal(d) {
     body += pvHtml;
   }
 
+  // Chart (sparkline)
+  if (d.chart && d.chart.prices && d.chart.prices.length > 1) {
+    body += '<div class="modal-section"><div class="modal-section-title">Price Chart (100 1h closes)</div><div class="modal-chart-wrap"><canvas id="modalChart" width="700" height="80"></canvas></div></div>';
+  }
+
+  // Fear & Greed
+  if (d.fear_greed) {
+    const fg = d.fear_greed;
+    const fgVal = parseInt(fg.value);
+    let fgCls = 'fg-neutral';
+    let fgLabel = fg.value_classification || 'Neutral';
+    if (fgVal <= 25) fgCls = 'fg-extreme-fear';
+    else if (fgVal <= 40) fgCls = 'fg-fear';
+    else if (fgVal <= 60) fgCls = 'fg-neutral';
+    else if (fgVal <= 80) fgCls = 'fm-greed';
+    else fgCls = 'fg-extreme-greed';
+    body += '<div class="modal-section"><div class="modal-section-title">Fear & Greed Index</div><div class="modal-grid modal-grid-3">' +
+      modalItem('Value', '<span class="' + fgCls + '" style="font-size:22px;font-weight:700">' + fgVal + '</span>', fgCls, fgLabel) +
+      modalItem('Last Updated', fg.timestamp ? new Date(parseInt(fg.timestamp)*1000).toLocaleDateString() : 'N/A') +
+      '</div></div>';
+  }
+
+  // Futures: Funding Rate
+  if (d.funding_rate) {
+    const fr = d.funding_rate;
+    const annualCls = fr.annualized_est > 20 ? 'liq-short' : fr.annualized_est < -20 ? 'liq-long' : fr.annualized_est > 10 ? 'liq-short' : fr.annualized_est < -10 ? 'liq-long' : '';
+    const annEst = fr.annualized_est != null ? (fr.annualized_est >= 0 ? '+' : '') + fr.annualized_est.toFixed(2) + '%' : 'N/A';
+    const annLast = fr.annualized_last != null ? (fr.annualized_last >= 0 ? '+' : '') + fr.annualized_last.toFixed(2) + '%' : 'N/A';
+    body += '<div class="modal-section"><div class="modal-section-title">Funding Rate (Perpetual Futures)</div><div class="modal-grid modal-grid-3">' +
+      modalItem('Est. Rate (8h)', fr.estimated != null ? (fr.estimated * 100).toFixed(4) + '%' : 'N/A') +
+      modalItem('Last Rate (8h)', fr.last != null ? (fr.last * 100).toFixed(4) + '%' : 'N/A') +
+      modalItem('Ann. Est.', annEst, annualCls) +
+      modalItem('Ann. Last', annLast, annualCls) +
+      modalItem('Mark Price', fr.mark_price != null ? fr.mark_price.toFixed(2) : 'N/A') +
+      modalItem('Index Price', fr.index_price != null ? fr.index_price.toFixed(2) : 'N/A') +
+      '</div></div>';
+  }
+
+  // Futures: Open Interest
+  if (d.open_interest) {
+    const oi = d.open_interest.open_interest || 0;
+    const oiNotional = oi * (d.ticker ? d.ticker.price || 0 : 0);
+    body += '<div class="modal-section"><div class="modal-section-title">Open Interest (Futures)</div><div class="modal-grid modal-grid-3">' +
+      modalItem('OI (Contracts)', oi.toLocaleString(undefined, {maximumFractionDigits:0})) +
+      modalItem('OI (USD)', '$' + oiNotional.toLocaleString(undefined, {maximumFractionDigits:0})) +
+      '</div></div>';
+  }
+
+  // Futures: Long / Short Ratio
+  if (d.long_short_ratio) {
+    const ls = d.long_short_ratio;
+    const lsCls = ls.long_short_ratio > 1.2 ? 'liq-long' : ls.long_short_ratio < 0.8 ? 'liq-short' : '';
+    body += '<div class="modal-section"><div class="modal-section-title">Long / Short Ratio (5m)</div><div class="modal-grid modal-grid-3">' +
+      modalItem('L/S Ratio', ls.long_short_ratio.toFixed(2), lsCls) +
+      modalItem('Long %', (ls.long_account * 100).toFixed(1) + '%', 'liq-long') +
+      modalItem('Short %', (ls.short_account * 100).toFixed(1) + '%', 'liq-short') +
+      '</div></div>';
+  }
+
+  // Futures: Liquidations
+  if (d.liquidations) {
+    const lq = d.liquidations;
+    body += '<div class="modal-section"><div class="modal-section-title">Recent Liquidations (last 20)</div><div class="modal-grid modal-grid-3">' +
+      modalItem('Total Vol', '$' + lq.total_vol.toLocaleString()) +
+      modalItem('Long Vol', '$' + lq.long_vol.toLocaleString(), lq.long_vol > lq.short_vol ? 'liq-short' : '') +
+      modalItem('Short Vol', '$' + lq.short_vol.toLocaleString(), lq.short_vol > lq.long_vol ? 'liq-long' : '') +
+      modalItem('L/S Ratio', lq.ratio != null ? lq.ratio.toFixed(2) : 'N/A') +
+      modalItem('Count', lq.count) +
+      '</div></div>';
+  }
+
+  // Order Book Depth
+  if (d.orderbook) {
+    const ob = d.orderbook;
+    let obHtml = '<div class="modal-section"><div class="modal-section-title">Order Book Depth (Top 10)</div>';
+    // Summary
+    obHtml += '<div class="modal-grid modal-grid-3" style="margin-bottom:8px">' +
+      modalItem('Bid Liquidity', '$' + (ob.total_bid_notional || 0).toLocaleString(), 'depth-bid') +
+      modalItem('Ask Liquidity', '$' + (ob.total_ask_notional || 0).toLocaleString(), 'depth-ask') +
+      modalItem('Bid/Ask Ratio', ob.bid_ask_ratio != null ? ob.bid_ask_ratio.toFixed(4) : 'N/A') +
+      '</div>';
+    // Table
+    const maxNotional = Math.max(ob.total_bid_notional || 1, ob.total_ask_notional || 1);
+    obHtml += '<table class="modal-table"><thead><tr><th></th><th>Price</th><th>Qty</th><th>%</th></tr></thead><tbody>';
+    if (ob.bids && ob.bids.length) {
+      for (const b of ob.bids) {
+        const pct = (b.p * b.q) / maxNotional * 100;
+        obHtml += '<tr class="depth-bid"><td>BID</td><td>' + b.p.toFixed(2) + '</td><td>' + b.q.toFixed(4) + '</td><td><div class="depth-bar-wrap"><div class="depth-bar-fill" style="width:' + pct.toFixed(1) + '%;background:#089981"></div></div></td></tr>';
+      }
+    }
+    if (ob.asks && ob.asks.length) {
+      for (const a of ob.asks) {
+        const pct = (a.p * a.q) / maxNotional * 100;
+        obHtml += '<tr class="depth-ask"><td>ASK</td><td>' + a.p.toFixed(2) + '</td><td>' + a.q.toFixed(4) + '</td><td><div class="depth-bar-wrap"><div class="depth-bar-fill" style="width:' + pct.toFixed(1) + '%;background:#f23645;margin-left:auto"></div></div></td></tr>';
+      }
+    }
+    obHtml += '</tbody></table></div>';
+    body += obHtml;
+  }
+
   // Other
   body += '<div class="modal-section"><div class="modal-section-title">Other Indicators</div><div class="modal-grid modal-grid-3">' +
     modalItem('VWAP', d.vwap != null ? d.vwap.toFixed(2) : 'N/A') +
@@ -1007,6 +1162,74 @@ function renderModal(d) {
 function modalItem(label, value, cls = '', sub = '') {
   return '<div class="modal-item' + (cls ? ' ' + cls : '') + '"><div class="modal-item-label">' + label + '</div><div class="modal-item-value ' + cls + '">' + value + '</div>' + (sub ? '<div class="modal-item-sub">' + sub + '</div>' : '') + '</div>';
 }
+
+function drawSparkline(chart) {
+  const canvas = document.getElementById('modalChart');
+  if (!canvas || !chart || !chart.prices || chart.prices.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const pad = { t: 6, b: 6, l: 8, r: 8 };
+  const h = H - pad.t - pad.b;
+  const w = W - pad.l - pad.r;
+  const pts = chart.prices;
+  const mn = Math.min(...pts);
+  const mx = Math.max(...pts);
+  const rng = mx - mn || 1;
+  const coords = pts.map((p, i) => ({
+    x: pad.l + (i / (pts.length - 1)) * w,
+    y: pad.t + h - ((p - mn) / rng) * h,
+  }));
+  ctx.clearRect(0, 0, W, H);
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + (h / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+  }
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + h);
+  const isUp = pts[pts.length - 1] >= pts[0];
+  grad.addColorStop(0, isUp ? 'rgba(8,153,129,0.25)' : 'rgba(242,54,69,0.25)');
+  grad.addColorStop(1, isUp ? 'rgba(8,153,129,0.02)' : 'rgba(242,54,69,0.02)');
+  ctx.beginPath();
+  ctx.moveTo(coords[0].x, coords[0].y);
+  for (let i = 1; i < coords.length; i++) ctx.lineTo(coords[i].x, coords[i].y);
+  ctx.lineTo(coords[coords.length - 1].x, pad.t + h);
+  ctx.lineTo(coords[0].x, pad.t + h);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+  // Line
+  ctx.beginPath();
+  ctx.moveTo(coords[0].x, coords[0].y);
+  for (let i = 1; i < coords.length; i++) ctx.lineTo(coords[i].x, coords[i].y);
+  ctx.strokeStyle = isUp ? '#089981' : '#f23645';
+  ctx.lineWidth = 1.8;
+  ctx.stroke();
+  // Current price line
+  ctx.beginPath();
+  ctx.moveTo(coords[coords.length - 1].x, coords[coords.length - 1].y);
+  ctx.lineTo(W, coords[coords.length - 1].y);
+  ctx.strokeStyle = isUp ? '#089981' : '#f23645';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 3]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Dot at end
+  ctx.beginPath();
+  ctx.arc(coords[coords.length - 1].x, coords[coords.length - 1].y, 3, 0, Math.PI * 2);
+  ctx.fillStyle = isUp ? '#089981' : '#f23645';
+  ctx.fill();
+}
+
+// Wire up sparkline after body update
+const origRenderSetBody = (id, html) => document.getElementById(id).innerHTML = html;
+const _origRenderEnd = renderModal;
+renderModal = function(d) {
+  _origRenderEnd(d);
+  if (d.chart) setTimeout(() => drawSparkline(d.chart), 50);
+};
 
 // Click handler on table rows
 document.getElementById('tableBody').addEventListener('click', (e) => {
