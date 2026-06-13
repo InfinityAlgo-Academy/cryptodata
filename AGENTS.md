@@ -3,10 +3,12 @@
 ## Run
 
 ```sh
-python3 main.py
+python3 main.py          # Terminal UI (requires real terminal)
+python3 webapp.py         # Web dashboard at http://localhost:8080
 ```
 
-Requires a real terminal (Rich `Live` display). No tests, no linter, no typecheck CI.
+Terminal UI requires a real terminal (Rich `Live` display). Web dashboard runs in any browser.
+No tests, no linter, no typecheck CI.
 
 ## Architecture
 
