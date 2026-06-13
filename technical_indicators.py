@@ -209,7 +209,7 @@ def vwap_from_klines(klines: List[list]) -> Optional[float]:
     return pv_sum / v_sum if v_sum else None
 
 
-async def fetch_depth(symbol: str, limit: int = 100) -> Optional[Tuple[List, List]]:
+async def fetch_depth(symbol: str, limit: int = 500) -> Optional[Tuple[List, List]]:
     url = f"https://api.binance.com/api/v3/depth?symbol={symbol}&limit={limit}"
     loop = asyncio.get_running_loop()
     def _fetch():
@@ -222,7 +222,7 @@ async def fetch_depth(symbol: str, limit: int = 100) -> Optional[Tuple[List, Lis
         return None
 
 
-def find_walls(levels: List, cluster_pct: float = 0.2, nearest_to: Optional[float] = None) -> Tuple[Optional[float], Optional[float]]:
+def find_walls(levels: List, cluster_pct: float = 0.2) -> Tuple[Optional[float], Optional[float]]:
     if not levels:
         return None, None
     parsed = sorted(
@@ -248,10 +248,7 @@ def find_walls(levels: List, cluster_pct: float = 0.2, nearest_to: Optional[floa
         scored.append((avg_price, total_qty))
     if not scored:
         return None, None
-    if nearest_to is not None:
-        scored.sort(key=lambda x: abs(x[0] - nearest_to))
-    else:
-        scored.sort(key=lambda x: x[1], reverse=True)
+    scored.sort(key=lambda x: x[1], reverse=True)
     best = scored[0]
     return best[0], best[1]
 
@@ -351,8 +348,8 @@ async def compute_indicators_for_symbol(symbol: str) -> Optional[dict]:
             if depth:
                 bids, asks = depth
                 close_price = float(klines_1h[-1][K_CLOSE])
-                bp, bq = find_walls(bids, nearest_to=close_price)
-                ap, aq = find_walls(asks, nearest_to=close_price)
+                bp, bq = find_walls(bids)
+                ap, aq = find_walls(asks)
                 if bp is not None:
                     result["bid_wall_price"] = bp
                     result["bid_wall_qty"] = bq
