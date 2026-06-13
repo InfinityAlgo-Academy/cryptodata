@@ -443,6 +443,8 @@ let tbody = document.getElementById('tableBody');
 let statusEl = document.getElementById('status');
 let headerTime = document.getElementById('headerTime');
 let uptimeEl = document.getElementById('uptime');
+let loadingEl = document.getElementById('loading');
+let summaryEl = document.getElementById('summaryContent');
 
 function updateUptime() {
   const s = Math.floor((Date.now() - startTime) / 1000);
@@ -483,104 +485,18 @@ function connectWS() {
   };
 }
 
-function render(data) {
-  document.getElementById('loading').style.display = 'none';
-  headerTime.textContent = data.time || '';
-  document.getElementById('lastUpdate').textContent = data.time ? data.time.split(' ')[0] : '';
-
-  const s = data.summary;
-  if (s) {
-    document.getElementById('trackedCount').textContent = s.total || 0;
-    document.getElementById('breadthItem').style.display = '';
-    document.getElementById('breadthText').textContent = '\u25B2' + s.gainers + ' \u25BC' + s.losers;
-    const total = s.total || 1;
-    const gw = Math.round(s.gainers / total * 100);
-    const lw = Math.round(s.losers / total * 100);
-    const nw = 100 - gw - lw;
-    document.getElementById('breadthBar').innerHTML =
-      '<span class="breadth-gainers" style="width:'+gw+'%"></span>' +
-      '<span class="breadth-neutral" style="width:'+nw+'%"></span>' +
-      '<span class="breadth-losers" style="width:'+lw+'%"></span>';
-    document.getElementById('breadthBar').style.width = '80px';
-
-    document.getElementById('avgChgItem').style.display = '';
-    const avg = s.avg_chg || 0;
-    document.getElementById('avgChg').innerHTML = `<span class="${clsPct(avg)}">${fmtPct(avg)}</span>`;
-
-    document.getElementById('volItem').style.display = '';
-    document.getElementById('totalVol').innerHTML = `<span class="vol">${fmtVol(s.total_vol)}</span>`;
-
-    if (s.best && s.best.symbol) {
-      document.getElementById('bestItem').style.display = '';
-      document.getElementById('bestSym').textContent = s.best.symbol;
-      document.getElementById('bestChg').innerHTML = `<span class="chg-positive">${fmtPct(s.best.chg_pct)}</span>`;
-    }
-    if (s.worst && s.worst.symbol) {
-      document.getElementById('worstItem').style.display = '';
-      document.getElementById('worstSym').textContent = s.worst.symbol;
-      document.getElementById('worstChg').innerHTML = `<span class="chg-negative">${fmtPct(s.worst.chg_pct)}</span>`;
-    }
+// Fetch initial data via REST, then open WebSocket for streaming
+async function fetchInitial() {
+  try {
+    const res = await fetch('/api/data');
+    const data = await res.json();
+    if (data && data.rows) render(data);
+  } catch(e) {
+    console.warn('Initial fetch failed, waiting for WS', e);
   }
-
-  if (!data.rows || !data.rows.length) return;
-  let html = '';
-  for (const r of data.rows) {
-    const priceStr = fmtPrice(r.price);
-    const chgStr = fmtPct(r.chg_pct);
-    const chgCls = clsPct(r.chg_pct);
-    const volStr = fmtVol(r.vol);
-    const rvCls = clsRV(r.rvol_ratio);
-    const spCls = clsSpread(r.spread_bps);
-
-    const trendStr = trendText(r.trend);
-    const trendCls = r.trend === 'up' ? 'trend-up' : r.trend === 'down' ? 'trend-down' : '';
-
-    const spreadVal = r.spread_bps != null ? r.spread_bps.toFixed(1) : 'N/A';
-    const rvolVal = r.rvol_ratio != null ? r.rvol_ratio.toFixed(1)+'x' : 'N/A';
-    const vwapStr = fmtPct(r.vwap_dist);
-    const ma20Str = fmtPct(r.ma20_dist);
-    const ma50Str = fmtPct(r.ma50_dist);
-    const ma200Str = fmtPct(r.ma200_dist);
-    const bbStr = r.bb_pct != null ? r.bb_pct+'%' : 'N/A';
-    const atrStr = r.atr_pct != null ? r.atr_pct.toFixed(2)+'%' : 'N/A';
-    const macdStr = r.macd_hist != null ? (r.macd_hist >= 0 ? '+' : '') + r.macd_hist.toFixed(2) : 'N/A';
-    const fibStr = r.fib_pct != null ? r.fib_pct+'%' : 'N/A';
-    const rsiStr = rsiText(r.rsi5, r.rsi5_div);
-    const highStr = fmtPrice(r.high);
-    const lowStr = fmtPrice(r.low);
-
-    html += '<tr>' +
-      '<td class="num">' + r.num + '</td>' +
-      '<td class="symbol">' + r.symbol + '</td>' +
-      '<td class="' + clsAction(r.action) + '">' + r.action_label + '</td>' +
-      '<td>' + targetsHtml(r.targets) + '</td>' +
-      '<td class="' + trendCls + '">' + trendStr + '</td>' +
-      '<td class="price">' + priceStr + '</td>' +
-      '<td class="' + chgCls + '">' + chgStr + '</td>' +
-      '<td class="' + spCls + '">' + spreadVal + '</td>' +
-      '<td style="font-size:11px">' + obHtmlBoth(r.ob_bid, r.ob_ask) + '</td>' +
-      '<td class="vol">' + volStr + '</td>' +
-      '<td class="' + rvCls + '">' + rvolVal + '</td>' +
-      '<td>' + whalesHtml(r.whales_side, r.whales_val) + '</td>' +
-      '<td class="' + clsDist(r.vwap_dist) + '">' + vwapStr + '</td>' +
-      '<td class="' + clsDist(r.ma20_dist) + '">' + ma20Str + '</td>' +
-      '<td class="' + clsDist(r.ma50_dist) + '">' + ma50Str + '</td>' +
-      '<td class="' + clsDist(r.ma200_dist) + '">' + ma200Str + '</td>' +
-      '<td class="' + clsBB(r.bb_pct) + '">' + bbStr + '</td>' +
-      '<td class="' + clsATR(r.atr_pct) + '">' + atrStr + '</td>' +
-      '<td class="' + macdCls(r.macd_hist) + '">' + macdStr + '</td>' +
-      '<td class="' + divCls(r.macd_div) + '">' + (r.macd_div === 'bullish' ? '\u2B06' : r.macd_div === 'bearish' ? '\u2B07' : '\u2014') + '</td>' +
-      '<td class="' + clsFib(r.fib_pct) + '">' + fibStr + '</td>' +
-      '<td class="' + clsRSI(r.rsi5) + '">' + rsiStr + '</td>' +
-      '<td>' + highStr + '</td>' +
-      '<td>' + lowStr + '</td>' +
-      '<td style="color:var(--text-dim)">' + r.time + '</td>' +
-      '</tr>';
-  }
-  tbody.innerHTML = html;
+  connectWS();
 }
-
-connectWS();
+fetchInitial();
 setInterval(() => { if (ws && ws.readyState === WebSocket.OPEN) ws.send('ping'); }, 30000);
 </script>
 </body>

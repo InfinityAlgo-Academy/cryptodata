@@ -15,7 +15,9 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set
 
 import pandas as pd
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
@@ -178,10 +180,9 @@ def pick_fib_targets(price, ti, score):
     def pick(cands, is_buy):
         if not cands:
             return None
-        stop = (max([v for v in [fib_618, fib_50] if v and v < price]) if is_buy
-                else min([v for v in [fib_127, fib_161] if v and v > price]))
-        if stop is None:
-            stop = price * (0.97 if is_buy else 1.03)
+        stop_pool = [v for v in ([fib_618, fib_50] if is_buy else [fib_127, fib_161])
+                     if v and (v < price if is_buy else v > price)]
+        stop = (max(stop_pool) if stop_pool else price * (0.97 if is_buy else 1.03))
         scored = []
         for lbl, val in cands:
             risk = (price - stop) if is_buy else (stop - price)
@@ -548,6 +549,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Crypto Market Scanner", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
@@ -561,6 +570,15 @@ async def root():
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "symbols": len(store.symbols) if store else 0, "clients": len(manager.active)}
+
+
+@app.get("/api/data")
+async def api_data():
+    if manager.latest_data:
+        return manager.latest_data
+    if store and rsi_store and tech_store:
+        return await compute_display_data(store, rsi_store, tech_store)
+    return {"type": "update", "rows": [], "summary": {}}
 
 
 @app.websocket("/ws")
