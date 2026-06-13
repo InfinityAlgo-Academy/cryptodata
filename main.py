@@ -310,11 +310,11 @@ class ScannerUI:
                 if qty is None or pr is None or pr <= 0:
                     return "—"
                 val = qty * pr
+                if val < 1_000:
+                    return "—"
                 if val >= 1_000_000:
                     return f"${val/1_000_000:.1f}M"
-                if val >= 1_000:
-                    return f"${val/1_000:.0f}K"
-                return f"${val:.0f}"
+                return f"${int(val/1_000)}K"
             def pfmt(v):
                 if v is None: return "—"
                 if v >= 1000: return f"{v:.2f}"
@@ -323,17 +323,17 @@ class ScannerUI:
             bw_q = ti.get("bid_wall_qty")
             aw_p = ti.get("ask_wall_price")
             aw_q = ti.get("ask_wall_qty")
-            has_walls = (bw_p is not None and bw_q is not None and bw_q * (price or 0) >= 50_000
-                         ) or (aw_p is not None and aw_q is not None and aw_q * (price or 0) >= 50_000)
+            has_walls = (bw_p is not None and bw_q is not None and bw_q * (price or 0) >= 1_000
+                         ) or (aw_p is not None and aw_q is not None and aw_q * (price or 0) >= 1_000)
             bar = Text("│", style="dim")
             if has_walls:
                 parts = []
-                if bw_p is not None and bw_q is not None and bw_q * (price or 0) >= 50_000:
+                if bw_p is not None and bw_q is not None and bw_q * (price or 0) >= 1_000:
                     parts.append(Text(f"B {pfmt(bw_p)} {qfmt_quote(bw_q, price)}", style="bold green"))
                 else:
                     parts.append(Text("B —", style="dim"))
                 parts.append(bar)
-                if aw_p is not None and aw_q is not None and aw_q * (price or 0) >= 50_000:
+                if aw_p is not None and aw_q is not None and aw_q * (price or 0) >= 1_000:
                     parts.append(Text(f"S {pfmt(aw_p)} {qfmt_quote(aw_q, price)}", style="bold red"))
                 else:
                     parts.append(Text("S —", style="dim"))
@@ -341,7 +341,7 @@ class ScannerUI:
             if bid is not None and bid_qty is not None and ask is not None and ask_qty is not None:
                 bid_val = bid_qty * (price or 0)
                 ask_val = ask_qty * (price or 0)
-                if bid_val >= 50_000 or ask_val >= 50_000:
+                if bid_val >= 1_000 or ask_val >= 1_000:
                     return Text.assemble(
                         Text(f"{pfmt(bid)} {qfmt_quote(bid_qty, price)}", style="green"),
                         bar,
@@ -381,20 +381,28 @@ class ScannerUI:
                 if q is None or pr is None or pr <= 0:
                     return 0.0
                 return q * pr
+            def fmt_val(val):
+                if val < 1_000:
+                    return None
+                if val >= 1_000_000:
+                    return f"${val/1_000_000:.1f}M"
+                return f"${int(val/1_000)}K"
             bw_q = ti.get("bid_wall_qty")
             aw_q = ti.get("ask_wall_qty")
             bv = qval(bw_q, price)
             av = qval(aw_q, price)
-            if bv >= 50_000 or av >= 50_000:
+            if bv >= 1_000 or av >= 1_000:
                 side = "B" if bv >= av else "S"
-                val = bv if side == "B" else av
-                return Text(f"{side} ${val/1_000_000:.2f}M" if val >= 1_000_000 else f"{side} ${val/1_000:.0f}K", style="bold green" if side == "B" else "bold red")
+                txt = fmt_val(bv if side == "B" else av)
+                if txt:
+                    return Text(f"{side} {txt}", style="bold green" if side == "B" else "bold red")
             bv = qval(bid_qty, price)
             av = qval(ask_qty, price)
-            if bv >= 50_000 or av >= 50_000:
+            if bv >= 1_000 or av >= 1_000:
                 side = "B" if bv >= av else "S"
-                val = bv if side == "B" else av
-                return Text(f"{side} ${val/1_000_000:.2f}M" if val >= 1_000_000 else f"{side} ${val/1_000:.0f}K", style="bold green" if side == "B" else "bold red")
+                txt = fmt_val(bv if side == "B" else av)
+                if txt:
+                    return Text(f"{side} {txt}", style="bold green" if side == "B" else "bold red")
             return Text("—", style="dim")
 
         def score_signal(rsi: Optional[float], bb_pct: Optional[float], fib_pct: Optional[float],
